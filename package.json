@@ -1,0 +1,201 @@
+{
+  "name": "local-model-provider",
+  "displayName": "Local Model Provider",
+  "description": "VS Code extension to connect to local LLM inference servers (Ollama, llama.cpp, LocalAI) via OpenAI API compatible endpoints.",
+  "version": "1.0.0",
+  "publisher": "krevas",
+  "icon": "assets/local-model-provider.png",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/krevas/local-model-provider.git"
+  },
+  "engines": {
+    "vscode": "^1.108.1"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=es2020",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "test-compile": "tsc -p ./",
+    "deploy": "vsce publish --no-yarn",
+    "package": "vsce package --no-yarn"
+  },
+  "categories": [
+    "AI",
+    "Machine Learning",
+    "Chat"
+  ],
+  "keywords": [
+    "llm",
+    "openai",
+    "openai-compatible",
+    "chat completions",
+    "vllm",
+    "ollama",
+    "llama.cpp",
+    "localai",
+    "self-hosted",
+    "local",
+    "function calling",
+    "tool calling",
+    "model provider",
+    "gateway"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "local-model-provider",
+        "displayName": "Local Model Provider"
+      }
+    ],
+    "commands": [
+      {
+        "command": "local-model-provider.testConnection",
+        "title": "Test Server Connection",
+        "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.setApiKey",
+        "title": "Set API Key (Secure)",
+        "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.showStatus",
+        "title": "Show Server Status",
+        "category": "Local Model Provider"
+      }
+    ],
+    "configuration": {
+      "title": "Local Model Provider",
+      "properties": {
+        "local.model.provider.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "Inference server URL (OpenAI API compatible endpoint)",
+          "order": 1
+        },
+        "local.model.provider.requestTimeout": {
+          "type": "number",
+          "default": 60000,
+          "description": "Request timeout in milliseconds",
+          "order": 3
+        },
+        "local.model.provider.defaultMaxTokens": {
+          "type": "number",
+          "default": 32768,
+          "description": "Default maximum input tokens for models (context window)",
+          "order": 4
+        },
+        "local.model.provider.defaultMaxOutputTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Default maximum output tokens for models",
+          "order": 5
+        },
+        "local.model.provider.enableToolCalling": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable tool calling capability for models",
+          "order": 6
+        },
+        "local.model.provider.parallelToolCalling": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow model to call multiple tools in parallel (disable if model has issues with parallel calls)",
+          "order": 7
+        },
+        "local.model.provider.agentTemperature": {
+          "type": "number",
+          "default": 0.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "description": "Temperature for agent/tool calling mode (lower = more consistent tool call formatting). Set to 0.0 for best results with fine-tuned models.",
+          "order": 8
+        },
+        "local.model.provider.topP": {
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Top-p (nucleus) sampling parameter. Lower values make output more focused.",
+          "order": 9
+        },
+        "local.model.provider.frequencyPenalty": {
+          "type": "number",
+          "default": 0.0,
+          "minimum": -2.0,
+          "maximum": 2.0,
+          "description": "Frequency penalty to reduce repetition of token sequences.",
+          "order": 10
+        },
+        "local.model.provider.presencePenalty": {
+          "type": "number",
+          "default": 0.0,
+          "minimum": -2.0,
+          "maximum": 2.0,
+          "description": "Presence penalty to encourage talking about new topics.",
+          "order": 11
+        },
+        "local.model.provider.maxRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Maximum number of retry attempts for failed requests.",
+          "order": 12
+        },
+        "local.model.provider.retryDelayMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 30000,
+          "description": "Base delay in milliseconds between retry attempts (uses exponential backoff).",
+          "order": 13
+        },
+        "local.model.provider.modelCacheTtlMs": {
+          "type": "number",
+          "default": 300000,
+          "minimum": 0,
+          "maximum": 3600000,
+          "description": "How long to cache the model list in milliseconds (0 = no caching, default = 5 minutes).",
+          "order": 14
+        },
+        "local.model.provider.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "enumDescriptions": [
+            "Log all messages including debug information",
+            "Log informational messages, warnings, and errors",
+            "Log only warnings and errors",
+            "Log only errors"
+          ],
+          "description": "Logging verbosity level for the output channel.",
+          "order": 15
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/vscode": "^1.106.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.27.0",
+    "eslint": "^9.39.1",
+    "typescript": "^5.7.2"
+  }
+}

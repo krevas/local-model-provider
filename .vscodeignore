@@ -1,0 +1,39 @@
+.vscode/**
+.vscode-test/**
+.devcontainer/**
+.github/**
+.git/**
+
+# Source (bundled into out/ by esbuild)
+src/**
+**/*.ts
+**/*.map
+tsconfig.json
+
+# Linters/formatters/configs
+eslint.config.mjs
+.eslintrc.json
+.prettier*
+.editorconfig
+.gitignore
+
+# Node/dev artifacts
+node_modules/**
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Tests and docs (not required in VSIX)
+test/**
+tests/**
+docs/**
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+PROJECT_SUMMARY.md
+INSTALLATION_TESTING.md
+
+# Misc
+*.vsix
+*.log
+.DS_Store
+Thumbs.db
