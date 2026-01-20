@@ -73,6 +73,20 @@ A VS Code extension that connects your editor to self‑hosted or local LLMs via
 3) Use your models
 - Open the model manager and enable models from the “Local Model Provider”.
 
+## 🖼️ Screenshots
+
+- Model configuration
+
+![Model configuration](assets/1_model_config.png)
+
+- Model selection
+
+![Model selection](assets/2_model_select.PNG)
+
+- Test execution
+
+![Test execution](assets/3_test.PNG)
+
 ## ⚙️ Configuration
 
 All settings are under the `local.model.provider.*` namespace.
