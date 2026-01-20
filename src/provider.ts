@@ -33,6 +33,15 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     // Initialize API key from secure storage (store promise for awaiting later)
     this.initializationPromise = this.initializeApiKey();
 
+    // React to secret storage changes (API key updates)
+    context.subscriptions.push(
+      context.secrets.onDidChange(async (e) => {
+        if (e.key === 'local.model.provider.apiKey') {
+          await this.refreshApiKey();
+        }
+      })
+    );
+
     // Watch for configuration changes
     context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
@@ -60,6 +69,23 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       }
     } catch (error) {
       this.log('error', `Failed to load API key: ${error}`);
+    }
+  }
+
+  /**
+   * Force refresh API key from secure storage and update client immediately
+   */
+  public async refreshApiKey(): Promise<void> {
+    try {
+      const apiKey = await this.secretManager.getApiKey();
+      this.config.apiKey = apiKey || '';
+      this.client.updateConfig(this.config);
+      this.log('info', apiKey ? 'API key updated from secure storage' : 'API key cleared');
+      // Clear model cache so next call revalidates with new credentials
+      this.cachedModels = null;
+      this.modelCacheTimestamp = 0;
+    } catch (error) {
+      this.log('error', `Failed to refresh API key: ${error}`);
     }
   }
 

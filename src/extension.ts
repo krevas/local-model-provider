@@ -86,6 +86,8 @@ export function activate(context: vscode.ExtensionContext) {
 
       try {
         await secretManager.setApiKey(apiKey);
+        // Apply the updated key to the running client immediately
+        await provider.refreshApiKey();
         if (apiKey) {
           vscode.window.showInformationMessage(
             'Local Model Provider: API key stored securely.'
