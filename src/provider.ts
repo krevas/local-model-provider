@@ -18,6 +18,8 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   // Model cache
   private cachedModels: vscode.LanguageModelChatInformation[] | null = null;
   private modelCacheTimestamp: number = 0;
+  // Ensure async init (API key load) completes before first requests
+  private readonly initializationPromise: Promise<void>;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.outputChannel = vscode.window.createOutputChannel('Local Model Provider');
@@ -28,8 +30,8 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       baseDelayMs: this.config.retryDelayMs,
     });
     
-    // Initialize API key from secure storage
-    this.initializeApiKey();
+    // Initialize API key from secure storage (store promise for awaiting later)
+    this.initializationPromise = this.initializeApiKey();
 
     // Watch for configuration changes
     context.subscriptions.push(
@@ -479,6 +481,13 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     options: { silent: boolean; },
     token: vscode.CancellationToken
   ): Promise<vscode.LanguageModelChatInformation[]> {
+    // Ensure API key (and other async init) has completed
+    try {
+      await this.initializationPromise;
+    } catch {
+      // Ignore init errors here; downstream will surface issues
+    }
+    this.log('debug', `API key configured: ${this.config.apiKey ? 'yes' : 'no'}`);
     // Check cache first
     const now = Date.now();
     if (this.cachedModels && this.config.modelCacheTtlMs > 0 && 
@@ -747,6 +756,13 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
+    // Ensure API key (and other async init) has completed before first request
+    try {
+      await this.initializationPromise;
+    } catch {
+      // Continue; errors will be handled by request path
+    }
+    this.log('debug', `API key configured: ${this.config.apiKey ? 'yes' : 'no'}`);
     this.log('info', `Sending chat request to model: ${model.id}`);
     this.log('debug', `Tool mode: ${options.toolMode}, Tools: ${options.tools?.length || 0}`);
     this.log('debug', `Message count: ${messages.length}`);
@@ -909,8 +925,15 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   private loadConfig(): GatewayConfig {
     const config = vscode.workspace.getConfiguration('local.model.provider');
 
+    // Normalize server URL (strip trailing /v1 to avoid double path like /v1/v1)
+    let serverUrlRaw = config.get<string>('serverUrl', 'http://localhost:8000');
+    if (/\/v1\/?$/.test(serverUrlRaw)) {
+      serverUrlRaw = serverUrlRaw.replace(/\/v1\/?$/, '');
+      this.outputChannel.appendLine('NOTE: Stripped trailing /v1 from serverUrl setting to avoid duplicated path.');
+    }
+
     const cfg: GatewayConfig = {
-      serverUrl: config.get<string>('serverUrl', 'http://localhost:8000'),
+      serverUrl: serverUrlRaw,
       apiKey: '', // Loaded from SecretStorage via initializeApiKey()
       requestTimeout: config.get<number>('requestTimeout', 60000),
       defaultMaxTokens: config.get<number>('defaultMaxTokens', 32768),

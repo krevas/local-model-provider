@@ -534,8 +534,15 @@ export class GatewayClient {
     const headers: Record<string, string> = {};
 
     if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      const raw = String(this.config.apiKey).trim();
+      const bearer = raw.toLowerCase().startsWith('bearer ') ? raw : `Bearer ${raw}`;
+      // Standard OpenAI-compatible header
+      headers['Authorization'] = bearer;
+      // Common alternative used by some gateways
+      headers['x-api-key'] = raw;
     }
+
+    headers['Accept'] = 'application/json';
 
     return headers;
   }
