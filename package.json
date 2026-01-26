@@ -2,7 +2,7 @@
   "name": "local-model-provider",
   "displayName": "Local Model Provider",
   "description": "VS Code extension to connect to local LLM inference servers (Ollama, llama.cpp, LocalAI) via OpenAI API compatible endpoints.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "krevas",
   "icon": "assets/local-model-provider.png",
   "private": true,
@@ -12,7 +12,7 @@
     "url": "https://github.com/krevas/local-model-provider.git"
   },
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.100.0"
   },
   "scripts": {
     "vscode:prepublish": "npm run esbuild-base -- --minify",
