@@ -69,6 +69,10 @@ interface ToolCallState {
 interface ParsedChunk {
   delta?: {
     content?: string;
+    // Reasoning/thinking content fields (various API formats)
+    reasoning_content?: string;  // OpenAI o1/o3 format
+    reasoning?: string;          // Alternative format
+    thinking?: string;           // Anthropic format
     tool_calls?: Array<{
       index?: number;
       id?: string;
@@ -78,6 +82,10 @@ interface ParsedChunk {
   };
   message?: {
     content?: string;
+    // Reasoning/thinking content fields (various API formats)
+    reasoning_content?: string;
+    reasoning?: string;
+    thinking?: string;
     text?: string;
     tool_calls?: Array<{
       index?: number;
@@ -310,12 +318,21 @@ export class GatewayClient {
   }
 
   /**
+   * Extract reasoning content from delta or message (supports multiple API formats)
+   */
+  private extractReasoningContent(obj: { reasoning_content?: string; reasoning?: string; thinking?: string } | undefined): string | undefined {
+    if (!obj) return undefined;
+    // Check various reasoning field formats used by different APIs
+    return obj.reasoning_content || obj.reasoning || obj.thinking || undefined;
+  }
+
+  /**
    * Process delta format from streaming response
    */
   private processDeltaFormat(
     parsed: ParsedChunk,
     state: ToolCallState
-  ): { content: string; finishedToolCalls: StreamingToolCall[] } {
+  ): { content: string; reasoning_content?: string; finishedToolCalls: StreamingToolCall[] } {
     const delta = parsed.delta!;
     const finishedToolCalls: StreamingToolCall[] = [];
 
@@ -336,7 +353,10 @@ export class GatewayClient {
       finishedToolCalls.push(...this.finalizeToolCalls(state));
     }
 
-    return { content: delta.content || '', finishedToolCalls };
+    // Extract reasoning content from various API formats
+    const reasoning_content = this.extractReasoningContent(delta);
+
+    return { content: delta.content || '', reasoning_content, finishedToolCalls };
   }
 
   /**
@@ -345,7 +365,7 @@ export class GatewayClient {
   private processMessageFormat(
     parsed: ParsedChunk,
     state: ToolCallState
-  ): { content: string; finishedToolCalls: StreamingToolCall[] } {
+  ): { content: string; reasoning_content?: string; finishedToolCalls: StreamingToolCall[] } {
     const message = parsed.message!;
     const finishedToolCalls: StreamingToolCall[] = [];
 
@@ -375,7 +395,10 @@ export class GatewayClient {
       });
     }
 
-    return { content: message.content || message.text || '', finishedToolCalls };
+    // Extract reasoning content from various API formats
+    const reasoning_content = this.extractReasoningContent(message);
+
+    return { content: message.content || message.text || '', reasoning_content, finishedToolCalls };
   }
 
   /**
@@ -402,7 +425,7 @@ export class GatewayClient {
   private processSSELine(
     line: string,
     state: ToolCallState
-  ): { content: string; tool_calls: StreamingToolCall[]; finished_tool_calls: StreamingToolCall[] } | null {
+  ): { content: string; reasoning_content?: string; tool_calls: StreamingToolCall[]; finished_tool_calls: StreamingToolCall[] } | null {
     const trimmed = line.trim();
 
     if (trimmed === '' || trimmed === 'data: [DONE]') {
@@ -418,13 +441,13 @@ export class GatewayClient {
     if (!parsed) { return null; }
 
     if (parsed.delta) {
-      const { content, finishedToolCalls } = this.processDeltaFormat(parsed, state);
-      return { content, tool_calls: [], finished_tool_calls: finishedToolCalls };
+      const { content, reasoning_content, finishedToolCalls } = this.processDeltaFormat(parsed, state);
+      return { content, reasoning_content, tool_calls: [], finished_tool_calls: finishedToolCalls };
     }
 
     if (parsed.message) {
-      const { content, finishedToolCalls } = this.processMessageFormat(parsed, state);
-      return { content, tool_calls: [], finished_tool_calls: finishedToolCalls };
+      const { content, reasoning_content, finishedToolCalls } = this.processMessageFormat(parsed, state);
+      return { content, reasoning_content, tool_calls: [], finished_tool_calls: finishedToolCalls };
     }
 
     return null;
@@ -459,7 +482,7 @@ export class GatewayClient {
   public async *streamChatCompletion(
     request: OpenAIChatCompletionRequest,
     cancellationToken: vscode.CancellationToken
-  ): AsyncGenerator<{ content: string; tool_calls: StreamingToolCall[]; finished_tool_calls: StreamingToolCall[] }, void, unknown> {
+  ): AsyncGenerator<{ content: string; reasoning_content?: string; tool_calls: StreamingToolCall[]; finished_tool_calls: StreamingToolCall[] }, void, unknown> {
     const url = `${this.config.serverUrl}/v1/chat/completions`;
     const state = this.createToolCallState();
 

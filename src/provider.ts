@@ -872,10 +872,23 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
 
     try {
       let totalContent = '';
+      let totalReasoningContent = '';
       let totalToolCalls = 0;
 
       for await (const chunk of this.client.streamChatCompletion(requestOptions as unknown as OpenAIChatCompletionRequest, token)) {
         if (token.isCancellationRequested) { break; }
+
+        // Handle reasoning/thinking content from the model
+        if (chunk.reasoning_content) {
+          totalReasoningContent += chunk.reasoning_content;
+          // Use LanguageModelThinkingPart if available (proposed API), otherwise fallback to text
+          if (typeof (vscode as any).LanguageModelThinkingPart !== 'undefined') {
+            progress.report(new (vscode as any).LanguageModelThinkingPart(chunk.reasoning_content));
+          } else {
+            // Fallback: wrap reasoning in <think> tags for visibility
+            progress.report(new vscode.LanguageModelTextPart(chunk.reasoning_content));
+          }
+        }
 
         if (chunk.content) {
           totalContent += chunk.content;
@@ -890,9 +903,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
         }
       }
 
-      this.outputChannel.appendLine(`Completed chat request, received ${totalContent.length} characters, ${totalToolCalls} tool calls`);
+      this.outputChannel.appendLine(`Completed chat request, received ${totalContent.length} characters, ${totalReasoningContent.length} reasoning characters, ${totalToolCalls} tool calls`);
 
-      if (totalContent.length === 0 && totalToolCalls === 0) {
+      if (totalContent.length === 0 && totalToolCalls === 0 && totalReasoningContent.length === 0) {
         await this.handleEmptyResponse(model, inputText, openAIMessages.length, requestOptions.tools ? (requestOptions.tools as unknown[]).length : 0, token, progress);
       }
     } catch (error) {
