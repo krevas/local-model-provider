@@ -109,6 +109,28 @@ interface GatewayConfig {
 }
 ```
 
+### Server Presets
+
+The extension supports quick configuration for common inference servers:
+
+| Preset | Default URL | Notes |
+|--------|-------------|-------|
+| vLLM | http://localhost:8000 | Recommended for production use |
+| Ollama | http://localhost:11434 | Good for local development |
+| llama.cpp | http://localhost:8080 | Lightweight option |
+| LM Studio | http://localhost:1234 | User-friendly GUI |
+| Custom | User-defined | Any OpenAI-compatible server |
+  agentTemperature: number;    // Temperature for tool mode
+  topP: number;                // Nucleus sampling parameter
+  frequencyPenalty: number;    // Reduce token repetition
+  presencePenalty: number;     // Encourage new topics
+  maxRetries: number;          // Max retry attempts
+  retryDelayMs: number;        // Base retry delay
+  modelCacheTtlMs: number;     // Model list cache duration
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+}
+```
+
 ## Message Conversion
 
 ### VS Code to OpenAI Format
@@ -193,10 +215,29 @@ class GatewayError extends Error {
 2. **New Commands**
    - Register in `extension.ts`
    - Add to `package.json` → `contributes.commands`
+   - Add menu items to `package.json` → `contributes.menus`
 
 3. **New API Endpoints**
    - Add method to `client.ts`
    - Call from `provider.ts` as needed
+
+4. **New Server Presets**
+   - Define preset configuration in settings
+   - Add preset selection to commands
+   - Update documentation with preset details
+
+### Feature Menu
+
+The extension provides a status bar menu with quick actions:
+
+| Menu Item | Action | Description |
+|-----------|--------|-------------|
+| Refresh Models | `refreshModels` | Clears cache and fetches models |
+| Test Connection | `testConnection` | Verifies server connectivity |
+| Set API Key | `setApiKey` | Opens secure API key storage |
+| Open Settings | `openSettings` | Opens extension settings |
+| Select Server Preset | `selectPreset` | Quick server configuration |
+| Show Logs | `showLogs` | Opens output channel |
 
 ## Performance Considerations
 

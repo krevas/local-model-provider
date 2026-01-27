@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.7
+
+### New Features
+- **Delete Server Presets**: Remove saved server presets with confirmation dialog
+
+### Improvements
+- Server preset menu now shows delete option when presets exist
+- Better model selection responsiveness with immediate cache refresh
+
 ## 1.0.6
 
 ### New Features

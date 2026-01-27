@@ -11,7 +11,10 @@ A VS Code extension that connects your editor to self‑hosted or local LLMs via
 - Built‑in retries with exponential backoff and detailed logging
 - Model list caching for fewer network calls
 - API keys securely stored in VS Code SecretStorage
-- Status bar health monitor and quick actions
+- Status bar health monitor with quick actions
+- Server presets for quick switching between endpoints
+- Usage statistics tracking (requests, tokens, response times)
+- Default model selection for consistent workflow
 
 ## 🔌 Compatible Inference Servers
 
@@ -87,20 +90,39 @@ A VS Code extension that connects your editor to self‑hosted or local LLMs via
 
 ![Test execution](assets/3_test.PNG)
 
+- Feature menu
+
+![Feature menu](assets/4_menu.PNG)
+
+- Server preset
+
+![Server preset](assets/5_server_preset.PNG)
+
 ## ⚙️ Configuration
 
 All settings are under the `local.model.provider.*` namespace.
 
+### Server Configuration
 - `serverUrl` (string): base URL, e.g. `http://localhost:8000`
+- `serverPresets` (array): saved server configurations for quick switching
+- `defaultModel` (string): default model ID to use (leave empty for auto-select)
 - `requestTimeout` (number, ms): default 60000
+
+### Token & Context Settings
 - `defaultMaxTokens` (number): estimated context window (default 32768). If your model/server supports larger context, consider increasing this for better continuity (e.g., 65k–128k).
 - `defaultMaxOutputTokens` (number): max generation tokens (default 4096). Increase when you need longer answers; ensure input + output stays within the model's context window.
+
+### Function Calling
 - `enableToolCalling` (boolean): enable function calling (default true)
 - `parallelToolCalling` (boolean): allow parallel tool calls (default true)
 - `agentTemperature` (number): temperature with tools (default 0.0)
+
+### Sampling Parameters
 - `topP` (number): nucleus sampling (default 1.0)
 - `frequencyPenalty` (number): repetition penalty (default 0.0)
 - `presencePenalty` (number): topic shift encouragement (default 0.0)
+
+### Reliability & Performance
 - `maxRetries` (number): retry attempts (default 3)
 - `retryDelayMs` (number): backoff base delay (default 1000)
 - `modelCacheTtlMs` (number): model list cache TTL (default 300000)
@@ -111,13 +133,28 @@ API keys are not stored in settings. Use the command palette:
 
 ## ⌨️ Commands
 
-- “Local Model Provider: Test Server Connection” — Check connectivity and list models
-- “Local Model Provider: Set API Key (Secure)” — Store/remove API key in SecretStorage
-- “Local Model Provider: Show Server Status” — Open the status bar menu
+- "Local Model Provider: Set API Key (Secure)" — Store/remove API key in SecretStorage
+- "Local Model Provider: Show Server Status" — Open the status bar menu with quick actions
+- "Local Model Provider: View Models & Set Default" — Browse available models and set a default
+- "Local Model Provider: Switch Server Preset" — Quick switch between configured server endpoints
+- "Local Model Provider: View Usage Statistics" — Display session statistics (requests, tokens, response times)
+- "Local Model Provider: Refresh Model Cache" — Clear cache and fetch models from server
 
 ## 🏥 Status Bar Health Monitor
 
-See connection status at a glance. Click to open quick actions (refresh, open settings, set API key, show logs).
+See connection status at a glance. Click to open quick actions:
+- View and set default model
+- Switch server presets
+- View usage statistics
+- Refresh model cache
+- Set API key
+- Open settings
+- Show logs
+
+The status bar displays:
+- Connection status (connected/error/unknown)
+- Number of available models
+- Session statistics when available
 
 ## 🔧 Troubleshooting
 

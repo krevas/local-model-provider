@@ -149,8 +149,18 @@ export function activate(context: vscode.ExtensionContext) {
           description: 'Create a new server preset',
           alwaysShow: true,
         },
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
       ];
+
+      // Add delete option if there are presets
+      if (presets.length > 0) {
+        items.push({
+          label: '$(trash) Delete Preset',
+          description: 'Remove a saved preset',
+          alwaysShow: true,
+        });
+      }
+
+      items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
 
       // Add current server if not in presets
       const currentInPresets = presets.some(p => p.url === currentUrl);
@@ -210,6 +220,35 @@ export function activate(context: vscode.ExtensionContext) {
         statusBar.setStatus(ServerStatus.Unknown, { serverUrl: url });
         provider.clearModelCache();
         vscode.window.showInformationMessage(`Created and switched to: ${name}`);
+      } else if (selected.label.includes('Delete Preset')) {
+        // Delete preset
+        const deleteItems: vscode.QuickPickItem[] = presets.map(preset => ({
+          label: `$(server) ${preset.name}`,
+          description: preset.url === currentUrl ? 'Currently active' : '',
+          detail: preset.url,
+        }));
+
+        const toDelete = await vscode.window.showQuickPick(deleteItems, {
+          placeHolder: 'Select preset to delete',
+          title: 'Delete Server Preset',
+        });
+
+        if (!toDelete) return;
+
+        const presetName = toDelete.label.replace(/^\$\([^)]+\)\s*/, '');
+        const confirmed = await vscode.window.showWarningMessage(
+          `Delete preset "${presetName}"?`,
+          { modal: true },
+          'Delete'
+        );
+
+        if (confirmed === 'Delete') {
+          const updatedPresets = presets.filter(p => p.name !== presetName);
+          await vscode.workspace.getConfiguration('local.model.provider')
+            .update('serverPresets', updatedPresets, vscode.ConfigurationTarget.Global);
+          
+          vscode.window.showInformationMessage(`Deleted preset: ${presetName}`);
+        }
       } else if (selected.detail) {
         // Switch to selected preset
         await vscode.workspace.getConfiguration('local.model.provider')

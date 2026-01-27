@@ -42,10 +42,15 @@ local-model-provider/
 │   ├── provider.ts     # Language model provider implementation
 │   ├── client.ts       # HTTP client for inference servers
 │   ├── types.ts        # TypeScript type definitions
-│   └── secrets.ts      # Secure storage management
+│   ├── secrets.ts      # Secure storage management
+│   ├── statusBar.ts    # Status bar UI manager
+│   └── statistics.ts   # Usage statistics tracking
+├── docs/               # Documentation
+│   └── API.md          # API documentation
 ├── assets/             # Icons and screenshots
 ├── package.json        # Extension manifest
-└── tsconfig.json       # TypeScript configuration
+├── tsconfig.json       # TypeScript configuration
+└── CONTRIBUTING.md     # This file
 ```
 
 ## Code Guidelines
@@ -74,6 +79,8 @@ local-model-provider/
 - Add JSDoc comments to all public methods
 - Update README.md for user-facing changes
 - Include inline comments for complex logic
+- Add screenshots to assets/ folder for new UI features
+- Update docs/API.md when changing internal APIs
 
 ## Testing
 
@@ -96,6 +103,9 @@ local-model-provider/
 - [ ] Configuration changes apply without restart
 - [ ] API key is stored securely
 - [ ] Error messages are user-friendly
+- [ ] Status bar menu displays correct server status
+- [ ] Server preset configuration works correctly
+- [ ] All commands in feature menu execute properly
 
 ## Submitting Changes
 
