@@ -137,11 +137,15 @@ export function activate(context: vscode.ExtensionContext) {
   const switchServerCommand = vscode.commands.registerCommand(
     'local-model-provider.switchServer',
     async () => {
-      const presets = vscode.workspace.getConfiguration('local.model.provider')
-        .get<ServerPreset[]>('serverPresets', []);
-
-      const currentUrl = vscode.workspace.getConfiguration('local.model.provider')
-        .get<string>('serverUrl', 'http://localhost:8000');
+      const config = vscode.workspace.getConfiguration('local.model.provider');
+      const presets = config.get<ServerPreset[]>('serverPresets', []);
+      
+      // Get current URL from actual config (check both workspace and global)
+      const currentUrl = config.get<string>('serverUrl', 'http://localhost:8000');
+      
+      // Log for debugging
+      console.log('[Local Model Provider] Current server URL:', currentUrl);
+      console.log('[Local Model Provider] Available presets:', presets.map(p => `${p.name}: ${p.url}`));
 
       const items: vscode.QuickPickItem[] = [
         {
@@ -210,16 +214,54 @@ export function activate(context: vscode.ExtensionContext) {
         const newPreset: ServerPreset = { name, url };
         const updatedPresets = [...presets, newPreset];
 
-        await vscode.workspace.getConfiguration('local.model.provider')
-          .update('serverPresets', updatedPresets, vscode.ConfigurationTarget.Global);
+        await config.update('serverPresets', updatedPresets, vscode.ConfigurationTarget.Global);
+
+        // Determine which configuration target to use for serverUrl
+        const inspection = config.inspect<string>('serverUrl');
+        let target = vscode.ConfigurationTarget.Global;
+        
+        if (inspection?.workspaceValue !== undefined) {
+          target = vscode.ConfigurationTarget.Workspace;
+        } else if (inspection?.workspaceFolderValue !== undefined) {
+          target = vscode.ConfigurationTarget.WorkspaceFolder;
+        }
 
         // Switch to new preset
-        await vscode.workspace.getConfiguration('local.model.provider')
-          .update('serverUrl', url, vscode.ConfigurationTarget.Global);
+        await config.update('serverUrl', url, target);
 
         statusBar.setStatus(ServerStatus.Unknown, { serverUrl: url });
         provider.clearModelCache();
-        vscode.window.showInformationMessage(`Created and switched to: ${name}`);
+        
+        // Refresh models from new server
+        vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Switching server and refreshing models...',
+            cancellable: false,
+          },
+          async () => {
+            try {
+              const models = await provider.provideLanguageModelChatInformation(
+                { silent: false },
+                new vscode.CancellationTokenSource().token
+              );
+              statusBar.setStatus(ServerStatus.Connected, { modelCount: models.length });
+              if (models.length > 0) {
+                vscode.window.showInformationMessage(
+                  `Created and switched to: ${name}\nFound ${models.length} model(s)`
+                );
+              } else {
+                vscode.window.showWarningMessage(
+                  `Created and switched to: ${name}\nNo models found.`
+                );
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              statusBar.setStatus(ServerStatus.Error, { errorMessage });
+              vscode.window.showErrorMessage(`Created preset: ${name}\nFailed to fetch models: ${errorMessage}`);
+            }
+          }
+        );
       } else if (selected.label.includes('Delete Preset')) {
         // Delete preset
         const deleteItems: vscode.QuickPickItem[] = presets.map(preset => ({
@@ -250,13 +292,67 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showInformationMessage(`Deleted preset: ${presetName}`);
         }
       } else if (selected.detail) {
+        // Check if already on this server
+        if (selected.detail === currentUrl) {
+          vscode.window.showInformationMessage(`Already connected to: ${selected.detail}`);
+          return;
+        }
+
         // Switch to selected preset
-        await vscode.workspace.getConfiguration('local.model.provider')
-          .update('serverUrl', selected.detail, vscode.ConfigurationTarget.Global);
+        console.log('[Local Model Provider] Switching from', currentUrl, 'to', selected.detail);
+        
+        // Determine which configuration target to use
+        const inspection = config.inspect<string>('serverUrl');
+        let target = vscode.ConfigurationTarget.Global;
+        
+        if (inspection?.workspaceValue !== undefined) {
+          target = vscode.ConfigurationTarget.Workspace;
+        } else if (inspection?.workspaceFolderValue !== undefined) {
+          target = vscode.ConfigurationTarget.WorkspaceFolder;
+        }
+        
+        console.log('[Local Model Provider] Updating serverUrl at target:', target);
+        
+        await config.update('serverUrl', selected.detail, target);
+        
+        // Verify the change
+        const newUrl = vscode.workspace.getConfiguration('local.model.provider')
+          .get<string>('serverUrl');
+        console.log('[Local Model Provider] Server URL after update:', newUrl);
 
         statusBar.setStatus(ServerStatus.Unknown, { serverUrl: selected.detail });
         provider.clearModelCache();
-        vscode.window.showInformationMessage(`Switched to: ${selected.detail}`);
+        
+        // Refresh models from new server
+        vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Switching server and refreshing models...',
+            cancellable: false,
+          },
+          async () => {
+            try {
+              const models = await provider.provideLanguageModelChatInformation(
+                { silent: false },
+                new vscode.CancellationTokenSource().token
+              );
+              statusBar.setStatus(ServerStatus.Connected, { modelCount: models.length });
+              if (models.length > 0) {
+                vscode.window.showInformationMessage(
+                  `Switched to: ${selected.detail}\nFound ${models.length} model(s)`
+                );
+              } else {
+                vscode.window.showWarningMessage(
+                  `Switched to: ${selected.detail}\nNo models found.`
+                );
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              statusBar.setStatus(ServerStatus.Error, { errorMessage });
+              vscode.window.showErrorMessage(`Switched to: ${selected.detail}\nFailed to fetch models: ${errorMessage}`);
+            }
+          }
+        );
       }
     }
   );

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.8
+
+### Bug Fixes
+- Fixed server switching not immediately reflecting in "Manage Language Models" menu
+- Fixed new preset creation not loading models from the new server
+
+### Improvements
+- Server switching now fetches models immediately with progress notification
+- New preset creation now validates server connection and displays model count
+- Enhanced user feedback when switching servers (shows model count or error)
+
 ## 1.0.7
 
 ### New Features
