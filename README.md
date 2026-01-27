@@ -1,3 +1,7 @@
+![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/krevas.local-model-provider?style=flat-square)
+![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/krevas.local-model-provider?style=flat-square)
+![License](https://img.shields.io/github/license/krevas/local-model-provider?style=flat-square)
+
 # Local Model Provider
 
 A VS Code extension that connects your editor to self‑hosted or local LLMs via any OpenAI‑compatible server (vLLM, Ollama, TGI, llama.cpp, LocalAI, etc.). Keep source code on your infrastructure while using AI for coding, refactoring, analysis, and more.
