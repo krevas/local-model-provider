@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GatewayClient } from './client';
 import { GatewayConfig, OpenAIChatCompletionRequest } from './types';
 import { SecretManager } from './secrets';
+import { StatisticsManager } from './statistics';
 
 /**
  * Language model provider for OpenAI-compatible inference servers
@@ -11,6 +12,7 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   private config: GatewayConfig;
   private readonly outputChannel: vscode.OutputChannel;
   private readonly secretManager: SecretManager;
+  private readonly statsManager: StatisticsManager | null;
   // Store tool schemas for the current request to fill missing required properties
   private readonly currentToolSchemas: Map<string, unknown> = new Map();
   // Track if we've shown the welcome notification this session
@@ -21,9 +23,10 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   // Ensure async init (API key load) completes before first requests
   private readonly initializationPromise: Promise<void>;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(private readonly context: vscode.ExtensionContext, statsManager?: StatisticsManager) {
     this.outputChannel = vscode.window.createOutputChannel('Local Model Provider');
     this.secretManager = new SecretManager(context, this.outputChannel);
+    this.statsManager = statsManager ?? null;
     this.config = this.loadConfig();
     this.client = new GatewayClient(this.config, {
       maxRetries: this.config.maxRetries,
@@ -90,10 +93,26 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   }
 
   /**
+   * Clear the model cache to force a refresh
+   */
+  public clearModelCache(): void {
+    this.cachedModels = null;
+    this.modelCacheTimestamp = 0;
+    this.log('info', 'Model cache cleared');
+  }
+
+  /**
    * Get the SecretManager for external use (e.g., commands)
    */
   public getSecretManager(): SecretManager {
     return this.secretManager;
+  }
+
+  /**
+   * Get the output channel for external use (e.g., commands)
+   */
+  public getOutputChannel(): vscode.OutputChannel {
+    return this.outputChannel;
   }
 
   /**
@@ -870,6 +889,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     const debugRequest = JSON.stringify(requestOptions, null, 2);
     this.log('debug', debugRequest.length > 2000 ? `Request (truncated): ${debugRequest.substring(0, 2000)}...` : `Request: ${debugRequest}`);
 
+    // Track timing for statistics
+    const requestStartTime = Date.now();
+
     try {
       let totalContent = '';
       let totalReasoningContent = '';
@@ -904,6 +926,19 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       }
 
       this.outputChannel.appendLine(`Completed chat request, received ${totalContent.length} characters, ${totalReasoningContent.length} reasoning characters, ${totalToolCalls} tool calls`);
+
+      // Record statistics
+      const responseTimeMs = Date.now() - requestStartTime;
+      const outputTokens = Math.ceil((totalContent.length + totalReasoningContent.length) / 4);
+      if (this.statsManager) {
+        this.statsManager.recordRequest({
+          modelId: model.id,
+          inputTokens: estimatedInputTokens,
+          outputTokens,
+          responseTimeMs,
+        });
+      }
+      this.log('info', `Response time: ${responseTimeMs}ms, Input tokens: ${estimatedInputTokens}, Output tokens: ~${outputTokens}`);
 
       if (totalContent.length === 0 && totalToolCalls === 0 && totalReasoningContent.length === 0) {
         await this.handleEmptyResponse(model, inputText, openAIMessages.length, requestOptions.tools ? (requestOptions.tools as unknown[]).length : 0, token, progress);

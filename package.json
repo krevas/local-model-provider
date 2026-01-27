@@ -2,7 +2,7 @@
   "name": "local-model-provider",
   "displayName": "Local Model Provider",
   "description": "VS Code extension to connect to local LLM inference servers (Ollama, llama.cpp, LocalAI) via OpenAI API compatible endpoints.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "krevas",
   "icon": "assets/local-model-provider.png",
   "private": true,
@@ -57,11 +57,6 @@
     ],
     "commands": [
       {
-        "command": "local-model-provider.testConnection",
-        "title": "Test Server Connection",
-        "category": "Local Model Provider"
-      },
-      {
         "command": "local-model-provider.setApiKey",
         "title": "Set API Key (Secure)",
         "category": "Local Model Provider"
@@ -69,6 +64,26 @@
       {
         "command": "local-model-provider.showStatus",
         "title": "Show Server Status",
+        "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.selectModel",
+        "title": "View Models & Set Default",
+        "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.switchServer",
+        "title": "Switch Server Preset",
+        "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.showStats",
+        "title": "View Usage Statistics",
+        "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.refreshModels",
+        "title": "Refresh Model Cache",
         "category": "Local Model Provider"
       }
     ],
@@ -81,11 +96,37 @@
           "description": "Inference server URL (OpenAI API compatible endpoint)",
           "order": 1
         },
+        "local.model.provider.serverPresets": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Preset display name"
+              },
+              "url": {
+                "type": "string",
+                "description": "Server URL"
+              }
+            },
+            "required": ["name", "url"]
+          },
+          "description": "Saved server presets for quick switching",
+          "order": 2
+        },
+        "local.model.provider.defaultModel": {
+          "type": "string",
+          "default": "",
+          "description": "Default model ID to use (leave empty for auto-select)",
+          "order": 3
+        },
         "local.model.provider.requestTimeout": {
           "type": "number",
           "default": 60000,
           "description": "Request timeout in milliseconds",
-          "order": 3
+          "order": 4
         },
         "local.model.provider.defaultMaxTokens": {
           "type": "number",

@@ -1,14 +1,22 @@
 import * as vscode from 'vscode';
+import { SessionStats, StatisticsManager } from './statistics';
 
 /**
  * Server connection status
  */
 export enum ServerStatus {
   Unknown = 'unknown',
-  Connecting = 'connecting',
   Connected = 'connected',
-  Disconnected = 'disconnected',
   Error = 'error',
+}
+
+/**
+ * Server preset configuration
+ */
+export interface ServerPreset {
+  name: string;
+  url: string;
+  apiKey?: string;
 }
 
 /**
@@ -26,45 +34,35 @@ interface StatusInfo {
  */
 const STATUS_CONFIG: Record<ServerStatus, StatusInfo> = {
   [ServerStatus.Unknown]: {
-    icon: '$(question)',
-    text: 'Local Model Provider',
-    tooltip: 'Local Model Provider: Status unknown',
-  },
-  [ServerStatus.Connecting]: {
-    icon: '$(sync~spin)',
-    text: 'Local Model Provider',
-    tooltip: 'Local Model Provider: Connecting...',
+    icon: '$(plug)',
+    text: 'Local LLM',
+    tooltip: 'Local Model Provider: Click for options',
   },
   [ServerStatus.Connected]: {
     icon: '$(check)',
-    text: 'Local Model Provider',
+    text: 'Local LLM',
     tooltip: 'Local Model Provider: Connected',
     color: new vscode.ThemeColor('statusBarItem.prominentForeground'),
   },
-  [ServerStatus.Disconnected]: {
-    icon: '$(debug-disconnect)',
-    text: 'Local Model Provider',
-    tooltip: 'Local Model Provider: Disconnected',
-    color: new vscode.ThemeColor('statusBarItem.warningForeground'),
-  },
   [ServerStatus.Error]: {
     icon: '$(error)',
-    text: 'Local Model Provider',
+    text: 'Local LLM',
     tooltip: 'Local Model Provider: Error',
     color: new vscode.ThemeColor('statusBarItem.errorForeground'),
   },
 };
 
 /**
- * Manages the status bar UI for server monitoring
+ * Manages the status bar UI for Local Model Provider
  */
 export class StatusBarManager implements vscode.Disposable {
   private readonly statusBarItem: vscode.StatusBarItem;
   private status: ServerStatus = ServerStatus.Unknown;
   private modelCount: number = 0;
   private serverUrl: string = '';
-  private lastCheckTime: Date | null = null;
-  private healthCheckInterval: NodeJS.Timeout | null = null;
+  private lastResponseTime: number = 0;
+  private sessionStats: SessionStats | null = null;
+  private readonly disposables: vscode.Disposable[] = [];
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(
@@ -88,7 +86,6 @@ export class StatusBarManager implements vscode.Disposable {
     }
   ): void {
     this.status = status;
-    this.lastCheckTime = new Date();
 
     if (options?.modelCount !== undefined) {
       this.modelCount = options.modelCount;
@@ -101,12 +98,26 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   /**
+   * Update statistics from StatisticsManager
+   */
+  public updateStats(stats: SessionStats): void {
+    this.sessionStats = stats;
+    this.lastResponseTime = stats.lastResponseTimeMs;
+    this.updateDisplay();
+  }
+
+  /**
    * Update the status bar display
    */
   private updateDisplay(errorMessage?: string): void {
     const config = STATUS_CONFIG[this.status];
     
-    this.statusBarItem.text = `${config.icon} ${config.text}`;
+    // Show response time if available
+    let text = `${config.icon} ${config.text}`;
+    if (this.status === ServerStatus.Connected && this.lastResponseTime > 0) {
+      text += ` (${StatisticsManager.formatDuration(this.lastResponseTime)})`;
+    }
+    this.statusBarItem.text = text;
     
     let tooltip = config.tooltip;
     if (this.serverUrl) {
@@ -115,13 +126,17 @@ export class StatusBarManager implements vscode.Disposable {
     if (this.status === ServerStatus.Connected && this.modelCount > 0) {
       tooltip += `\nModels: ${this.modelCount}`;
     }
+    if (this.sessionStats && this.sessionStats.totalRequests > 0) {
+      tooltip += `\n\n📊 Session Stats:`;
+      tooltip += `\n• Requests: ${this.sessionStats.totalRequests}`;
+      tooltip += `\n• Input: ${StatisticsManager.formatTokens(this.sessionStats.totalInputTokens)} tokens`;
+      tooltip += `\n• Output: ${StatisticsManager.formatTokens(this.sessionStats.totalOutputTokens)} tokens`;
+      tooltip += `\n• Avg Response: ${StatisticsManager.formatDuration(this.sessionStats.averageResponseTimeMs)}`;
+    }
     if (errorMessage) {
-      tooltip += `\n\nError: ${errorMessage}`;
+      tooltip += `\n\n⚠️ Error: ${errorMessage}`;
     }
-    if (this.lastCheckTime) {
-      tooltip += `\n\nLast checked: ${this.lastCheckTime.toLocaleTimeString()}`;
-    }
-    tooltip += '\n\nClick for more options';
+    tooltip += '\n\nClick for options';
     
     this.statusBarItem.tooltip = new vscode.MarkdownString(tooltip);
     this.statusBarItem.color = config.color;
@@ -134,68 +149,12 @@ export class StatusBarManager implements vscode.Disposable {
     status: ServerStatus;
     modelCount: number;
     serverUrl: string;
-    lastCheckTime: Date | null;
   } {
     return {
       status: this.status,
       modelCount: this.modelCount,
       serverUrl: this.serverUrl,
-      lastCheckTime: this.lastCheckTime,
     };
-  }
-
-  /**
-   * Start periodic health checks
-   */
-  public startHealthCheck(
-    checkFn: () => Promise<{ connected: boolean; modelCount: number; error?: string }>,
-    intervalMs: number = 60000
-  ): void {
-    this.stopHealthCheck();
-    
-    // Run immediately
-    this.runHealthCheck(checkFn);
-    
-    // Schedule periodic checks
-    this.healthCheckInterval = setInterval(() => {
-      this.runHealthCheck(checkFn);
-    }, intervalMs);
-  }
-
-  /**
-   * Run a single health check
-   */
-  private async runHealthCheck(
-    checkFn: () => Promise<{ connected: boolean; modelCount: number; error?: string }>
-  ): Promise<void> {
-    try {
-      this.setStatus(ServerStatus.Connecting);
-      const result = await checkFn();
-      
-      if (result.connected) {
-        this.setStatus(ServerStatus.Connected, {
-          modelCount: result.modelCount,
-        });
-      } else {
-        this.setStatus(ServerStatus.Disconnected, {
-          errorMessage: result.error,
-        });
-      }
-    } catch (error) {
-      this.setStatus(ServerStatus.Error, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  /**
-   * Stop periodic health checks
-   */
-  public stopHealthCheck(): void {
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = null;
-    }
   }
 
   /**
@@ -204,9 +163,22 @@ export class StatusBarManager implements vscode.Disposable {
   public async showStatusMenu(): Promise<void> {
     const items: vscode.QuickPickItem[] = [
       {
-        label: '$(refresh) Refresh Connection',
-        description: 'Test connection to inference server',
+        label: '$(list-unordered) View Models',
+        description: 'View available models and set default',
       },
+      {
+        label: '$(server) Switch Server',
+        description: 'Switch between server presets',
+      },
+      {
+        label: '$(graph) View Statistics',
+        description: 'View token usage and response times',
+      },
+      {
+        label: '$(sync) Refresh Models',
+        description: 'Refresh the model list cache',
+      },
+      { label: '', kind: vscode.QuickPickItemKind.Separator },
       {
         label: '$(gear) Open Settings',
         description: 'Configure Local Model Provider settings',
@@ -221,23 +193,22 @@ export class StatusBarManager implements vscode.Disposable {
       },
     ];
 
-    const statusLabel = this.getStatusLabel();
-    items.unshift({
-      label: `$(info) Status: ${statusLabel}`,
-      description: this.serverUrl || 'No server configured',
-      kind: vscode.QuickPickItemKind.Separator,
-    });
-
     const selected = await vscode.window.showQuickPick(items, {
-      placeHolder: 'Local Model Provider Status',
+      placeHolder: `Local Model Provider (${this.getStatusLabel()})`,
     });
 
     if (!selected) {
       return;
     }
 
-    if (selected.label.includes('Refresh Connection')) {
-      vscode.commands.executeCommand('local-model-provider.testConnection');
+    if (selected.label.includes('View Models')) {
+      vscode.commands.executeCommand('local-model-provider.selectModel');
+    } else if (selected.label.includes('Switch Server')) {
+      vscode.commands.executeCommand('local-model-provider.switchServer');
+    } else if (selected.label.includes('View Statistics')) {
+      vscode.commands.executeCommand('local-model-provider.showStats');
+    } else if (selected.label.includes('Refresh Models')) {
+      vscode.commands.executeCommand('local-model-provider.refreshModels');
     } else if (selected.label.includes('Open Settings')) {
       vscode.commands.executeCommand(
         'workbench.action.openSettings',
@@ -246,10 +217,7 @@ export class StatusBarManager implements vscode.Disposable {
     } else if (selected.label.includes('Set API Key')) {
       vscode.commands.executeCommand('local-model-provider.setApiKey');
     } else if (selected.label.includes('Show Output')) {
-      vscode.commands.executeCommand(
-        'workbench.action.output.show',
-        'Local Model Provider'
-      );
+      vscode.commands.executeCommand('local-model-provider.showOutput');
     }
   }
 
@@ -259,15 +227,11 @@ export class StatusBarManager implements vscode.Disposable {
   private getStatusLabel(): string {
     switch (this.status) {
       case ServerStatus.Connected:
-        return `Connected (${this.modelCount} models)`;
-      case ServerStatus.Connecting:
-        return 'Connecting...';
-      case ServerStatus.Disconnected:
-        return 'Disconnected';
+        return `${this.modelCount} model(s)`;
       case ServerStatus.Error:
         return 'Error';
       default:
-        return 'Unknown';
+        return 'Ready';
     }
   }
 
@@ -275,7 +239,8 @@ export class StatusBarManager implements vscode.Disposable {
    * Dispose resources
    */
   public dispose(): void {
-    this.stopHealthCheck();
     this.statusBarItem.dispose();
+    this.disposables.forEach(d => d.dispose());
   }
 }
+
