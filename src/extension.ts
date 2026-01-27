@@ -228,6 +228,8 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Switch to new preset
         await config.update('serverUrl', url, target);
+        // Ensure provider uses latest configuration immediately
+        provider.applyLatestConfiguration();
 
         statusBar.setStatus(ServerStatus.Unknown, { serverUrl: url });
         provider.clearModelCache();
@@ -314,6 +316,8 @@ export function activate(context: vscode.ExtensionContext) {
         console.log('[Local Model Provider] Updating serverUrl at target:', target);
         
         await config.update('serverUrl', selected.detail, target);
+        // Ensure provider uses latest configuration immediately
+        provider.applyLatestConfiguration();
         
         // Verify the change
         const newUrl = vscode.workspace.getConfiguration('local.model.provider')

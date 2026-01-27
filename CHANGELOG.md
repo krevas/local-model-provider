@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.9
+
+- Ensure model list refresh after server switch
+- Apply latest config immediately on serverUrl update to avoid stale models
+- Minor UX tweaks in server preset picker
+
 ## 1.0.8
 
 ### Bug Fixes

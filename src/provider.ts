@@ -22,6 +22,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   private modelCacheTimestamp: number = 0;
   // Ensure async init (API key load) completes before first requests
   private readonly initializationPromise: Promise<void>;
+  // Event emitter for model list changes
+  private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+  public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
   constructor(private readonly context: vscode.ExtensionContext, statsManager?: StatisticsManager) {
     this.outputChannel = vscode.window.createOutputChannel('Local Model Provider');
@@ -99,6 +102,19 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     this.cachedModels = null;
     this.modelCacheTimestamp = 0;
     this.log('info', 'Model cache cleared');
+    // Notify VS Code that the model list has changed
+    this._onDidChangeLanguageModelChatInformation.fire();
+  }
+
+  /**
+   * Immediately reload configuration and update HTTP client.
+   * Useful when settings are programmatically changed and we want
+   * to ensure subsequent operations use the latest config without
+   * waiting for VS Code config change events.
+   */
+  public applyLatestConfiguration(): void {
+    // Reuse existing reload logic
+    this.reloadConfig();
   }
 
   /**
