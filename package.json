@@ -1,7 +1,7 @@
 {
   "name": "local-model-provider",
   "displayName": "Local Model Provider",
-  "description": "VS Code extension to connect to local LLM inference servers (Ollama, llama.cpp, LocalAI, LM Studio, vLLM) via OpenAI API compatible endpoints.",
+  "description": "VS Code extension to connect to local or cloud LLM inference servers (Ollama, llama.cpp, LocalAI, LM Studio, vLLM, Astraflow) via OpenAI API compatible endpoints.",
   "version": "1.1.2",
   "publisher": "krevas",
   "icon": "assets/local-model-provider.png",
@@ -44,7 +44,9 @@
     "function calling",
     "tool calling",
     "model provider",
-    "gateway"
+    "gateway",
+    "astraflow",
+    "ucloud"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -95,12 +97,21 @@
         "local.model.provider.serverUrl": {
           "type": "string",
           "default": "http://localhost:8000",
-          "description": "Inference server URL (OpenAI API compatible endpoint)",
+          "description": "Inference server URL (OpenAI API compatible endpoint). Supports local servers (Ollama, llama.cpp, LM Studio, vLLM) and cloud providers such as Astraflow (https://astraflow.ucloud-global.com).",
           "order": 1
         },
         "local.model.provider.serverPresets": {
           "type": "array",
-          "default": [],
+          "default": [
+            {
+              "name": "Astraflow (Global)",
+              "url": "https://api-us-ca.umodelverse.ai/v1"
+            },
+            {
+              "name": "Astraflow (China)",
+              "url": "https://api.modelverse.cn/v1"
+            }
+          ],
           "items": {
             "type": "object",
             "properties": {
