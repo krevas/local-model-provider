@@ -90,6 +90,8 @@ export interface GatewayConfig {
   defaultMaxOutputTokens: number;
   enableToolCalling: boolean;
   parallelToolCalling: boolean;
+  qwenToolLoopCompat: boolean;
+  qwenFinalAnswerRetry: boolean;
   agentTemperature: number;
   // New extended options
   topP: number;

@@ -154,13 +154,25 @@
           "description": "Allow model to call multiple tools in parallel (disable if model has issues with parallel calls)",
           "order": 7
         },
+        "local.model.provider.qwenToolLoopCompat": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Qwen-specific tool loop compatibility: preserve reasoning across tool calls and add post-tool final-answer guidance.",
+          "order": 8
+        },
+        "local.model.provider.qwenFinalAnswerRetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "When Qwen tool loop compatibility is enabled, run one internal no-tools final-answer retry if Qwen returns only reasoning after a tool result.",
+          "order": 9
+        },
         "local.model.provider.agentTemperature": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "maximum": 2,
           "description": "Temperature for agent/tool calling mode (lower = more consistent tool call formatting). Set to 0.0 for best results with fine-tuned models.",
-          "order": 8
+          "order": 10
         },
         "local.model.provider.topP": {
           "type": "number",
@@ -168,7 +180,7 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Top-p (nucleus) sampling parameter. Lower values make output more focused.",
-          "order": 9
+          "order": 11
         },
         "local.model.provider.frequencyPenalty": {
           "type": "number",
@@ -176,7 +188,7 @@
           "minimum": -2,
           "maximum": 2,
           "description": "Frequency penalty to reduce repetition of token sequences.",
-          "order": 10
+          "order": 12
         },
         "local.model.provider.presencePenalty": {
           "type": "number",
@@ -184,7 +196,7 @@
           "minimum": -2,
           "maximum": 2,
           "description": "Presence penalty to encourage talking about new topics.",
-          "order": 11
+          "order": 13
         },
         "local.model.provider.maxRetries": {
           "type": "number",
@@ -192,7 +204,7 @@
           "minimum": 0,
           "maximum": 10,
           "description": "Maximum number of retry attempts for failed requests.",
-          "order": 12
+          "order": 14
         },
         "local.model.provider.retryDelayMs": {
           "type": "number",
@@ -200,7 +212,7 @@
           "minimum": 100,
           "maximum": 30000,
           "description": "Base delay in milliseconds between retry attempts (uses exponential backoff).",
-          "order": 13
+          "order": 15
         },
         "local.model.provider.modelCacheTtlMs": {
           "type": "number",
@@ -208,7 +220,7 @@
           "minimum": 0,
           "maximum": 3600000,
           "description": "How long to cache the model list in milliseconds (0 = no caching, default = 5 minutes).",
-          "order": 14
+          "order": 16
         },
         "local.model.provider.logLevel": {
           "type": "string",
@@ -226,7 +238,7 @@
             "Log only errors"
           ],
           "description": "Logging verbosity level for the output channel.",
-          "order": 15
+          "order": 17
         }
       }
     }

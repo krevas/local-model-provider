@@ -133,6 +133,8 @@ All settings are under the `local.model.provider.*` namespace.
 ### Function Calling
 - `enableToolCalling` (boolean): enable function calling (default true)
 - `parallelToolCalling` (boolean): allow parallel tool calls (default true)
+- `qwenToolLoopCompat` (boolean): enable Qwen-specific compatibility for XML-style tool calls and reasoning-only post-tool responses (default false)
+- `qwenFinalAnswerRetry` (boolean): when Qwen compatibility is enabled, run one no-tools final-answer retry after reasoning-only tool responses (default true)
 - `agentTemperature` (number): temperature with tools (default 0.0)
 
 ### Sampling Parameters
@@ -189,6 +191,7 @@ Empty response
 Tool call formatting issues
 1) Disable `parallelToolCalling` for unstable models
 2) Set `agentTemperature` to 0.0 for more consistent formatting
+3) For Qwen models that emit raw XML tool calls such as `<tool_call>` or return only reasoning after tools complete, enable `qwenToolLoopCompat`
 
 LM Studio connection errors ("terminated" / "request failed")
 1) Set `serverUrl` to `http://localhost:1234` (LM Studio default port)

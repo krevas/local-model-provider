@@ -15,6 +15,8 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   private readonly statsManager: StatisticsManager | null;
   // Store tool schemas for the current request to fill missing required properties
   private readonly currentToolSchemas: Map<string, unknown> = new Map();
+  // Preserve reasoning across tool steps for Qwen reasoning models.
+  private readonly toolCallReasoning: Map<string, string> = new Map();
   // Track if we've shown the welcome notification this session
   private hasShownWelcomeNotification = false;
   // Model cache
@@ -170,10 +172,13 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
    * Convert a tool result part to OpenAI format
    */
   private convertToolResultPart(part: vscode.LanguageModelToolResultPart): Record<string, unknown> {
+    const content = typeof part.content === 'string' ? part.content : JSON.stringify(part.content);
     return {
       tool_call_id: part.callId,
       role: 'tool',
-      content: typeof part.content === 'string' ? part.content : JSON.stringify(part.content),
+      content: this.config.qwenToolLoopCompat
+        ? `${content}\n\nTool execution completed. Continue from the preserved reasoning, then provide a concise final response in normal assistant content. Do not emit another tool call unless the result is insufficient.`
+        : content,
     };
   }
 
@@ -212,7 +217,11 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       }
 
       if (toolCalls.length > 0) {
-        openAIMessages.push({ role: 'assistant', content: textContent || null, tool_calls: toolCalls });
+        const preservedReasoning = this.config.qwenToolLoopCompat ? this.getPreservedReasoningForToolCalls(toolCalls) : '';
+        const assistantContent = preservedReasoning
+          ? `${preservedReasoning}${textContent ? `\n\n${textContent}` : ''}`
+          : textContent || null;
+        openAIMessages.push({ role: 'assistant', content: assistantContent, tool_calls: toolCalls });
       } else if (toolResults.length > 0) {
         openAIMessages.push(...toolResults);
       } else if (textContent) {
@@ -612,10 +621,13 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     const anyPart = part as Record<string, unknown>;
     if ('callId' in anyPart && 'content' in anyPart && !('name' in anyPart)) {
       this.outputChannel.appendLine(`  Found tool result (duck-typed): callId=${anyPart.callId}`);
+      const content = typeof anyPart.content === 'string' ? anyPart.content : JSON.stringify(anyPart.content);
       toolResults.push({
         tool_call_id: anyPart.callId,
         role: 'tool',
-        content: typeof anyPart.content === 'string' ? anyPart.content : JSON.stringify(anyPart.content),
+        content: this.config.qwenToolLoopCompat
+          ? `${content}\n\nTool execution completed. Continue from the preserved reasoning, then provide a concise final response in normal assistant content. Do not emit another tool call unless the result is insufficient.`
+          : content,
       });
     } else if ('callId' in anyPart && 'name' in anyPart && 'input' in anyPart) {
       this.outputChannel.appendLine(`  Found tool call (duck-typed): callId=${anyPart.callId}, name=${anyPart.name}`);
@@ -652,13 +664,32 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
 
     const result: Record<string, unknown>[] = [];
     if (toolCalls.length > 0) {
-      result.push({ role: 'assistant', content: textContent || null, tool_calls: toolCalls });
+      const preservedReasoning = this.config.qwenToolLoopCompat ? this.getPreservedReasoningForToolCalls(toolCalls) : '';
+      const assistantContent = preservedReasoning
+        ? `${preservedReasoning}${textContent ? `\n\n${textContent}` : ''}`
+        : textContent || null;
+      result.push({ role: 'assistant', content: assistantContent, tool_calls: toolCalls });
     } else if (toolResults.length > 0) {
       result.push(...toolResults);
     } else if (textContent) {
       result.push({ role, content: textContent });
     }
     return result;
+  }
+
+  /**
+   * Return prior reasoning as tagged assistant content so Qwen can continue after tool results.
+   */
+  private getPreservedReasoningForToolCalls(toolCalls: Record<string, unknown>[]): string {
+    const reasoning = toolCalls
+      .map((toolCall) => this.toolCallReasoning.get(String(toolCall.id)))
+      .find((value) => typeof value === 'string' && value.trim().length > 0);
+
+    if (!reasoning) {
+      return '';
+    }
+
+    return `<think>\n${reasoning.trim()}\n</think>`;
   }
 
   /**
@@ -711,7 +742,8 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
    */
   private processToolCall(
     toolCall: { id: string; name: string; arguments: string },
-    progress: vscode.Progress<vscode.LanguageModelResponsePart>
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    reasoningContent = ''
   ): void {
     this.outputChannel.appendLine(`\n=== TOOL CALL RECEIVED ===`);
     this.outputChannel.appendLine(`  ID: ${toolCall.id}`);
@@ -734,8 +766,59 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       args = this.fillMissingRequiredProperties(args, toolCall.name, toolSchema);
     }
 
+    if (this.config.qwenToolLoopCompat && reasoningContent.trim()) {
+      this.toolCallReasoning.set(toolCall.id, reasoningContent.trim());
+      this.outputChannel.appendLine(`  Preserved ${reasoningContent.length} reasoning characters for tool follow-up`);
+    }
+
     this.outputChannel.appendLine(`=== END TOOL CALL ===\n`);
     progress.report(new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, args));
+  }
+
+  /**
+   * Parse Qwen XML-style tool calls that may stream as content or reasoning
+   * instead of OpenAI-compatible tool_calls.
+   */
+  private extractXmlToolCalls(text: string): { text: string; toolCalls: Array<{ id: string; name: string; arguments: string }> } {
+    const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+    const withoutToolCalls = text.replace(
+      /<tool_call>\s*<function=([^>\s]+)>\s*([\s\S]*?)\s*<\/function>\s*<\/tool_call>/g,
+      (_match, name, body) => {
+        const args: Record<string, unknown> = {};
+        const parameterPattern = /<parameter=([^>\s]+)>\s*([\s\S]*?)\s*<\/parameter>/g;
+        let parameterMatch: RegExpExecArray | null;
+
+        while ((parameterMatch = parameterPattern.exec(body)) !== null) {
+          const rawValue = parameterMatch[2].trim();
+          let value: unknown = rawValue;
+
+          if (/^-?\d+$/.test(rawValue)) {
+            value = Number.parseInt(rawValue, 10);
+          } else if (/^-?\d+\.\d+$/.test(rawValue)) {
+            value = Number.parseFloat(rawValue);
+          } else if (rawValue === 'true' || rawValue === 'false') {
+            value = rawValue === 'true';
+          } else if ((rawValue.startsWith('{') && rawValue.endsWith('}')) || (rawValue.startsWith('[') && rawValue.endsWith(']'))) {
+            try {
+              value = JSON.parse(rawValue);
+            } catch {
+              value = rawValue;
+            }
+          }
+
+          args[parameterMatch[1].trim()] = value;
+        }
+
+        toolCalls.push({
+          id: `qwen_xml_${Date.now()}_${toolCalls.length}`,
+          name: String(name).trim(),
+          arguments: JSON.stringify(args),
+        });
+        return '';
+      }
+    );
+
+    return { text: withoutToolCalls.trim(), toolCalls };
   }
 
   /**
@@ -769,6 +852,60 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       `Check the "Local Model Provider" output panel for detailed logs.`;
 
     progress.report(new vscode.LanguageModelTextPart(errorMessage));
+  }
+
+  /**
+   * Qwen can return only reasoning after a tool result. Do one no-tools
+   * finalization pass so VS Code receives normal assistant content.
+   */
+  private async retryQwenFinalAnswer(
+    baseRequestOptions: Record<string, unknown>,
+    messages: Record<string, unknown>[],
+    reasoningContent: string,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    token: vscode.CancellationToken
+  ): Promise<boolean> {
+    const finalMessages = [...messages];
+    if (reasoningContent.trim()) {
+      finalMessages.push({
+        role: 'assistant',
+        content: `<think>\n${reasoningContent.trim()}\n</think>`,
+      });
+    }
+    finalMessages.push({
+      role: 'user',
+      content: 'Tool execution is complete. Return the final answer now in normal assistant content. Do not call tools. Do not output XML tool_call tags.',
+    });
+
+    const retryOptions: Record<string, unknown> = {
+      ...baseRequestOptions,
+      messages: finalMessages,
+      temperature: 0,
+      max_tokens: Math.min(Number(baseRequestOptions.max_tokens) || 4096, 4096),
+    };
+    delete retryOptions.tools;
+    delete retryOptions.tool_choice;
+    delete retryOptions.parallel_tool_calls;
+
+    let contentLength = 0;
+    let retryReasoningLength = 0;
+    this.log('info', 'Qwen tool-loop compatibility: running final-answer retry without tools.');
+
+    for await (const chunk of this.client.streamChatCompletion(retryOptions as unknown as OpenAIChatCompletionRequest, token)) {
+      if (token.isCancellationRequested) {
+        break;
+      }
+      if (chunk.reasoning_content) {
+        retryReasoningLength += chunk.reasoning_content.length;
+      }
+      if (chunk.content) {
+        contentLength += chunk.content.length;
+        progress.report(new vscode.LanguageModelTextPart(chunk.content));
+      }
+    }
+
+    this.log('info', `Qwen final-answer retry produced ${contentLength} content characters, ${retryReasoningLength} reasoning characters.`);
+    return contentLength > 0;
   }
 
   /**
@@ -940,6 +1077,8 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
     try {
       let totalContent = '';
       let totalReasoningContent = '';
+      let xmlToolBuffer = '';
+      let bufferingXmlToolCall = false;
       let totalToolCalls = 0;
 
       for await (const chunk of this.client.streamChatCompletion(requestOptions as unknown as OpenAIChatCompletionRequest, token)) {
@@ -948,10 +1087,12 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
         // Handle reasoning/thinking content from the model
         if (chunk.reasoning_content) {
           totalReasoningContent += chunk.reasoning_content;
-          // Use LanguageModelThinkingPart if available (proposed API), otherwise fallback to text
-          if (typeof (vscode as any).LanguageModelThinkingPart !== 'undefined') {
+          if (this.config.qwenToolLoopCompat && (chunk.reasoning_content.includes('<tool_call') || bufferingXmlToolCall)) {
+            xmlToolBuffer += chunk.reasoning_content;
+            bufferingXmlToolCall = true;
+          } else if (!this.config.qwenToolLoopCompat && typeof (vscode as any).LanguageModelThinkingPart !== 'undefined') {
             progress.report(new (vscode as any).LanguageModelThinkingPart(chunk.reasoning_content));
-          } else {
+          } else if (!this.config.qwenToolLoopCompat) {
             // Fallback: wrap reasoning in <think> tags for visibility
             progress.report(new vscode.LanguageModelTextPart(chunk.reasoning_content));
           }
@@ -959,14 +1100,42 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
 
         if (chunk.content) {
           totalContent += chunk.content;
-          progress.report(new vscode.LanguageModelTextPart(chunk.content));
+          if (this.config.qwenToolLoopCompat && bufferingXmlToolCall) {
+            xmlToolBuffer += chunk.content;
+          } else if (this.config.qwenToolLoopCompat) {
+            const toolStart = chunk.content.indexOf('<tool_call');
+            if (toolStart === -1) {
+              progress.report(new vscode.LanguageModelTextPart(chunk.content));
+            } else {
+              const visiblePrefix = chunk.content.slice(0, toolStart);
+              if (visiblePrefix) {
+                progress.report(new vscode.LanguageModelTextPart(visiblePrefix));
+              }
+              xmlToolBuffer += chunk.content.slice(toolStart);
+              bufferingXmlToolCall = true;
+            }
+          } else {
+            progress.report(new vscode.LanguageModelTextPart(chunk.content));
+          }
         }
 
         if (chunk.finished_tool_calls?.length) {
           for (const toolCall of chunk.finished_tool_calls) {
             totalToolCalls++;
-            this.processToolCall(toolCall, progress);
+            this.processToolCall(toolCall, progress, totalReasoningContent);
           }
+        }
+      }
+
+      if (this.config.qwenToolLoopCompat) {
+        const parsedXml = this.extractXmlToolCalls(xmlToolBuffer);
+        if (parsedXml.text && parsedXml.toolCalls.length === 0) {
+          progress.report(new vscode.LanguageModelTextPart(parsedXml.text));
+        }
+        for (const toolCall of parsedXml.toolCalls) {
+          totalToolCalls++;
+          this.outputChannel.appendLine('Converted Qwen XML tool call from streamed text/reasoning.');
+          this.processToolCall(toolCall, progress, totalReasoningContent);
         }
       }
 
@@ -985,8 +1154,26 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       }
       this.log('info', `Response time: ${responseTimeMs}ms, Input tokens: ${estimatedInputTokens}, Output tokens: ~${outputTokens}`);
 
-      if (totalContent.length === 0 && totalToolCalls === 0 && totalReasoningContent.length === 0) {
-        await this.handleEmptyResponse(model, inputText, openAIMessages.length, requestOptions.tools ? (requestOptions.tools as unknown[]).length : 0, token, progress);
+      if (totalContent.length === 0 && totalToolCalls === 0) {
+        if (totalReasoningContent.length > 0) {
+          const hasToolResults = openAIMessages.some((message) => message.role === 'tool');
+          if (hasToolResults && this.config.qwenToolLoopCompat && this.config.qwenFinalAnswerRetry) {
+            const retried = await this.retryQwenFinalAnswer(requestOptions, truncatedMessages, totalReasoningContent, progress, token);
+            if (retried) {
+              return;
+            }
+          }
+
+          const message = hasToolResults
+            ? 'The tool call completed, but the model produced reasoning without a final summary. Check the tool result above for the completed action.'
+            : xmlToolBuffer.includes('<tool_call')
+              ? 'The model started a tool call in its reasoning stream but did not complete a structured tool call before generation stopped. Try again with a narrower request, or reduce the reasoning budget if this keeps happening.'
+              : 'The model produced reasoning but no final answer or tool call. Try again with a narrower request, or reduce the reasoning budget if this keeps happening.';
+          this.log('warn', `Model returned reasoning-only response (${totalReasoningContent.length} reasoning characters).`);
+          progress.report(new vscode.LanguageModelTextPart(message));
+        } else {
+          await this.handleEmptyResponse(model, inputText, openAIMessages.length, requestOptions.tools ? (requestOptions.tools as unknown[]).length : 0, token, progress);
+        }
       }
     } catch (error) {
       this.handleChatError(error);
@@ -1059,6 +1246,8 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
       defaultMaxOutputTokens: config.get<number>('defaultMaxOutputTokens', 4096),
       enableToolCalling: config.get<boolean>('enableToolCalling', true),
       parallelToolCalling: config.get<boolean>('parallelToolCalling', true),
+      qwenToolLoopCompat: config.get<boolean>('qwenToolLoopCompat', false),
+      qwenFinalAnswerRetry: config.get<boolean>('qwenFinalAnswerRetry', true),
       agentTemperature: config.get<number>('agentTemperature', 0),
       // Extended options
       topP: config.get<number>('topP', 1.0),
