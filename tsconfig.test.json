@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "out-test",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "src/qwenXml.ts",
+    "test/**/*.ts"
+  ]
+}

@@ -81,6 +81,7 @@ web_modules/
 # Next.js build output
 .next
 out
+out-test
 
 # Nuxt.js build / generate output
 .nuxt

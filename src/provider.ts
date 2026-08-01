@@ -3,6 +3,7 @@ import { GatewayClient } from './client';
 import { GatewayConfig, OpenAIChatCompletionRequest } from './types';
 import { SecretManager } from './secrets';
 import { StatisticsManager } from './statistics';
+import { parseQwenXmlToolCalls } from './qwenXml';
 
 /**
  * Language model provider for OpenAI-compatible inference servers
@@ -780,45 +781,17 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
    * instead of OpenAI-compatible tool_calls.
    */
   private extractXmlToolCalls(text: string): { text: string; toolCalls: Array<{ id: string; name: string; arguments: string }> } {
-    const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
-    const withoutToolCalls = text.replace(
-      /<tool_call>\s*<function=([^>\s]+)>\s*([\s\S]*?)\s*<\/function>\s*<\/tool_call>/g,
-      (_match, name, body) => {
-        const args: Record<string, unknown> = {};
-        const parameterPattern = /<parameter=([^>\s]+)>\s*([\s\S]*?)\s*<\/parameter>/g;
-        let parameterMatch: RegExpExecArray | null;
+    return parseQwenXmlToolCalls(text);
+  }
 
-        while ((parameterMatch = parameterPattern.exec(body)) !== null) {
-          const rawValue = parameterMatch[2].trim();
-          let value: unknown = rawValue;
-
-          if (/^-?\d+$/.test(rawValue)) {
-            value = Number.parseInt(rawValue, 10);
-          } else if (/^-?\d+\.\d+$/.test(rawValue)) {
-            value = Number.parseFloat(rawValue);
-          } else if (rawValue === 'true' || rawValue === 'false') {
-            value = rawValue === 'true';
-          } else if ((rawValue.startsWith('{') && rawValue.endsWith('}')) || (rawValue.startsWith('[') && rawValue.endsWith(']'))) {
-            try {
-              value = JSON.parse(rawValue);
-            } catch {
-              value = rawValue;
-            }
-          }
-
-          args[parameterMatch[1].trim()] = value;
-        }
-
-        toolCalls.push({
-          id: `qwen_xml_${Date.now()}_${toolCalls.length}`,
-          name: String(name).trim(),
-          arguments: JSON.stringify(args),
-        });
-        return '';
-      }
-    );
-
-    return { text: withoutToolCalls.trim(), toolCalls };
+  private appendXmlToolBuffer(buffer: string, chunk: string): { buffer: string; buffering: boolean } {
+    const nextBuffer = buffer + chunk;
+    const lastOpenTag = nextBuffer.lastIndexOf('<tool_call');
+    const lastCloseTag = nextBuffer.lastIndexOf('</tool_call>');
+    return {
+      buffer: nextBuffer,
+      buffering: lastOpenTag > lastCloseTag,
+    };
   }
 
   /**
@@ -1088,8 +1061,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
         if (chunk.reasoning_content) {
           totalReasoningContent += chunk.reasoning_content;
           if (this.config.qwenToolLoopCompat && (chunk.reasoning_content.includes('<tool_call') || bufferingXmlToolCall)) {
-            xmlToolBuffer += chunk.reasoning_content;
-            bufferingXmlToolCall = true;
+            const buffered = this.appendXmlToolBuffer(xmlToolBuffer, chunk.reasoning_content);
+            xmlToolBuffer = buffered.buffer;
+            bufferingXmlToolCall = buffered.buffering;
           } else if (!this.config.qwenToolLoopCompat && typeof (vscode as any).LanguageModelThinkingPart !== 'undefined') {
             progress.report(new (vscode as any).LanguageModelThinkingPart(chunk.reasoning_content));
           } else if (!this.config.qwenToolLoopCompat) {
@@ -1101,7 +1075,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
         if (chunk.content) {
           totalContent += chunk.content;
           if (this.config.qwenToolLoopCompat && bufferingXmlToolCall) {
-            xmlToolBuffer += chunk.content;
+            const buffered = this.appendXmlToolBuffer(xmlToolBuffer, chunk.content);
+            xmlToolBuffer = buffered.buffer;
+            bufferingXmlToolCall = buffered.buffering;
           } else if (this.config.qwenToolLoopCompat) {
             const toolStart = chunk.content.indexOf('<tool_call');
             if (toolStart === -1) {
@@ -1111,8 +1087,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
               if (visiblePrefix) {
                 progress.report(new vscode.LanguageModelTextPart(visiblePrefix));
               }
-              xmlToolBuffer += chunk.content.slice(toolStart);
-              bufferingXmlToolCall = true;
+              const buffered = this.appendXmlToolBuffer(xmlToolBuffer, chunk.content.slice(toolStart));
+              xmlToolBuffer = buffered.buffer;
+              bufferingXmlToolCall = buffered.buffering;
             }
           } else {
             progress.report(new vscode.LanguageModelTextPart(chunk.content));
@@ -1129,13 +1106,13 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
 
       if (this.config.qwenToolLoopCompat) {
         const parsedXml = this.extractXmlToolCalls(xmlToolBuffer);
-        if (parsedXml.text && parsedXml.toolCalls.length === 0) {
-          progress.report(new vscode.LanguageModelTextPart(parsedXml.text));
-        }
         for (const toolCall of parsedXml.toolCalls) {
           totalToolCalls++;
           this.outputChannel.appendLine('Converted Qwen XML tool call from streamed text/reasoning.');
           this.processToolCall(toolCall, progress, totalReasoningContent);
+        }
+        if (parsedXml.text) {
+          progress.report(new vscode.LanguageModelTextPart(parsedXml.text));
         }
       }
 

@@ -19,6 +19,8 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=es2020",
     "esbuild": "npm run esbuild-base -- --sourcemap",
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "test": "tsc -p tsconfig.test.json && node out-test/test/qwenXml.test.js",
+    "test-qwen": "tsc -p tsconfig.test.json && node out-test/test/qwenXml.test.js",
     "test-compile": "tsc -p ./",
     "deploy": "vsce publish --no-yarn",
     "package": "vsce package --no-yarn"
