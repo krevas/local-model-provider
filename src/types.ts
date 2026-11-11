@@ -82,6 +82,20 @@ export interface OpenAIChatCompletionResponse {
   };
 }
 
+export interface OllamaPsModel {
+  name: string;
+  model: string;
+  size: number;
+  digest: string;
+  details?: unknown;
+  expires_at?: string;
+  size_vram?: number;
+}
+
+export interface OllamaPsResponse {
+  models: OllamaPsModel[];
+}
+
 export interface GatewayConfig {
   serverUrl: string;
   apiKey?: string;

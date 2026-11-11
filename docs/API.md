@@ -5,8 +5,8 @@ This document describes the internal architecture and APIs of Local Model Provid
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      VS Code                                  │
+┌──────────────────────────────────────────────────────────────┐
+│                      VS Code                                 │
 │  ┌─────────────────┐    ┌──────────────────────────────────┐ │
 │  │  Copilot Chat   │◄──►│  Local Model Provider            │ │
 │  │                 │    │  ┌────────────────────────────┐  │ │
@@ -23,7 +23,7 @@ This document describes the internal architecture and APIs of Local Model Provid
 │  │                 │    │  │   - Retry logic            │  │ │
 │  │                 │    │  └────────────┬───────────────┘  │ │
 │  └─────────────────┘    └───────────────┼──────────────────┘ │
-└─────────────────────────────────────────┼───────────────────┘
+└─────────────────────────────────────────┼────────────────────┘
                                           │
                                           ▼
                              ┌────────────────────────┐
@@ -46,6 +46,8 @@ The main provider class that implements VS Code's `LanguageModelChatProvider` in
 | `provideLanguageModelChatInformation()` | Fetches available models from the inference server |
 | `provideLanguageModelChatResponse()` | Handles chat completion requests with streaming |
 | `provideTokenCount()` | Estimates token count for messages |
+| `checkPsAvailable()` | Checks if the current server supports Ollama `/api/ps` |
+| `fetchRunningModels()` | Fetches currently loaded models from `/api/ps` |
 
 #### Key Features
 
@@ -53,6 +55,7 @@ The main provider class that implements VS Code's `LanguageModelChatProvider` in
 - **Token Management**: Estimates tokens and truncates context to fit limits
 - **Tool Call Handling**: Supports function calling with JSON repair for malformed responses
 - **Model Caching**: Caches model list to reduce API calls
+- **Running Models**: Optional Ollama `/api/ps` support to show currently loaded models
 
 ### GatewayClient
 
@@ -64,12 +67,15 @@ HTTP client for communicating with OpenAI-compatible inference servers.
 |--------|-------------|
 | `fetchModels()` | GET /v1/models - Retrieve available models |
 | `streamChatCompletion()` | POST /v1/chat/completions - Stream chat responses |
+| `checkPsAvailable()` | GET /api/ps - Lightweight check (only 404/405 = unsupported) |
+| `fetchRunningModels()` | GET /api/ps - Retrieve currently loaded models |
 
 #### Error Handling
 
 The client includes:
 - **Retry Logic**: Exponential backoff with jitter for transient failures
 - **Retryable Status Codes**: 429, 500, 502, 503, 504
+- **Retryable Errors**: also treats "fetch failed" as retryable
 - **GatewayError**: Custom error class with status code and retry information
 
 ### SecretManager
@@ -120,16 +126,8 @@ The extension supports quick configuration for common inference servers:
 | llama.cpp | http://localhost:8080 | Lightweight option |
 | LM Studio | http://localhost:1234 | User-friendly GUI |
 | Custom | User-defined | Any OpenAI-compatible server |
-  agentTemperature: number;    // Temperature for tool mode
-  topP: number;                // Nucleus sampling parameter
-  frequencyPenalty: number;    // Reduce token repetition
-  presencePenalty: number;     // Encourage new topics
-  maxRetries: number;          // Max retry attempts
-  retryDelayMs: number;        // Base retry delay
-  modelCacheTtlMs: number;     // Model list cache duration
-  logLevel: 'debug' | 'info' | 'warn' | 'error';
-}
-```
+
+Each preset can include an optional `supportsRunningModels` boolean. It defaults to true. Set it to false to hide the See Running Models menu item for that server.
 
 ## Message Conversion
 
@@ -202,6 +200,7 @@ class GatewayError extends Error {
 | Bad request | 400 | No |
 | Unauthorized | 401 | No |
 | Not found | 404 | No |
+| Fetch failed | - | Yes |
 
 ## Extension Points
 
@@ -232,12 +231,14 @@ The extension provides a status bar menu with quick actions:
 
 | Menu Item | Action | Description |
 |-----------|--------|-------------|
+| View Models | `selectModel` | Browse models and set default |
+| Switch Server | `switchServer` | Switch between server presets |
+| View Statistics | `showStats` | Display session statistics |
 | Refresh Models | `refreshModels` | Clears cache and fetches models |
-| Test Connection | `testConnection` | Verifies server connectivity |
+| See Running Models | `showRunningModels` | Shows currently loaded models (Ollama /api/ps) |
 | Set API Key | `setApiKey` | Opens secure API key storage |
 | Open Settings | `openSettings` | Opens extension settings |
-| Select Server Preset | `selectPreset` | Quick server configuration |
-| Show Logs | `showLogs` | Opens output channel |
+| Show Logs | `showOutput` | Opens output channel |
 
 ## Performance Considerations
 

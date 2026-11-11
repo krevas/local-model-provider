@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
 import {
   OpenAIChatCompletionRequest,
-  OpenAIModelsResponse,
-  GatewayConfig
+    OpenAIModelsResponse,
+    GatewayConfig,
+    OllamaPsResponse
 } from './types';
-
 /**
  * Retry configuration for failed requests
  */
@@ -139,7 +139,8 @@ export class GatewayClient {
              message.includes('econnreset') ||
              message.includes('econnrefused') ||
              message.includes('network') ||
-             message.includes('abort');
+             message.includes('abort') ||
+             message.includes('fetch failed');
     }
     return false;
   }
@@ -237,6 +238,61 @@ export class GatewayClient {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+    * Lightweight check if the server supports Ollama-style /api/ps (running models).
+    * Only 404/405 are treated as "unsupported". Other errors (auth, 5xx, network)
+    * return true so the menu item is not permanently hidden.
+    */
+  public async checkPsAvailable(): Promise<boolean> {
+    try {
+        const url = `${this.config.serverUrl}/api/ps`;
+        const response = await this.fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        if (response.status === 404 || response.status === 405) {
+            return false;
+        }
+        return true;
+    } catch {
+        return true;
+    }
+  }
+
+  /**
+    * Fetch currently running / loaded models from /api/ps (Ollama)
+    */
+  public async fetchRunningModels(): Promise<OllamaPsResponse> {
+    const url = `${this.config.serverUrl}/api/ps`;
+
+    try {
+        const response = await this.fetchWithRetry(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        }, 'Fetch running models');
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new GatewayError(
+                `Failed to fetch running models: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`,
+                response.status,
+                this.isRetryableError(null, response.status)
+            );
+        }
+
+        return await response.json();
+    } catch (error) {
+        if (error instanceof GatewayError) {
+            throw error;
+        }
+        throw new GatewayError(
+            `Failed to fetch running models: ${error instanceof Error ? error.message : String(error)}`,
+            undefined,
+            this.isRetryableError(error)
+        );
     }
   }
 

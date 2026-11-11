@@ -145,3 +145,7 @@ vite.config.ts.timestamp-*
 
 # Claude AI local settings
 .claude
+
+# Visual Studio / VS Code
+/.vs
+/package-lock.json
