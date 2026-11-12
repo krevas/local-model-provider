@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GatewayProvider } from './provider';
 import { StatusBarManager, ServerStatus, ServerPreset } from './statusBar';
 import { StatisticsManager } from './statistics';
+import { GatewayError } from './client';
 
 /**
  * Extension activation
@@ -28,7 +29,12 @@ export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.lm.registerLanguageModelChatProvider(
     'local-model-provider',
     provider
-  );
+    );
+
+  // Get server URL for status bar
+  const config = vscode.workspace.getConfiguration('local.model.provider');
+  const serverUrl = config.get<string>('serverUrl', 'http://localhost:8000');
+  statusBar.setStatus(ServerStatus.Unknown, { serverUrl });
 
   // Initialize per-server running-models support from presets
   const presets = config.get<ServerPreset[]>('serverPresets', []);
@@ -39,13 +45,6 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   context.subscriptions.push(disposable);
-
-  // Get server URL for status bar
-  const config = vscode.workspace.getConfiguration('local.model.provider');
-  const serverUrl = config.get<string>('serverUrl', 'http://localhost:8000');
-  statusBar.setStatus(ServerStatus.Unknown, { serverUrl });
-
-
 
   // Register command to set API key securely
   const setApiKeyCommand = vscode.commands.registerCommand(
@@ -493,7 +492,13 @@ export function activate(context: vscode.ExtensionContext) {
               const msg = error instanceof Error ? error.message : String(error);
               console.error('[Local Model Provider] fetchRunningModels error:', msg);
               provider.getOutputChannel().appendLine(`[ERROR] fetchRunningModels: ${msg}`);
-              vscode.window.showErrorMessage(`Failed to fetch running models: ${msg}`);
+
+              // GatewayError already has a clear message
+              if (error instanceof GatewayError) {
+                  vscode.window.showErrorMessage(msg);
+              } else {
+                  vscode.window.showErrorMessage(`Failed to fetch running models: ${msg}`);
+              }
           }
       }
   );

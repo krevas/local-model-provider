@@ -1269,7 +1269,9 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
    * Reload configuration and update client
    */
   private reloadConfig(): void {
+    const apiKey = this.config.apiKey;
     this.config = this.loadConfig();
+    this.config.apiKey = apiKey;
     this.client.updateConfig(this.config);
     this.outputChannel.appendLine('Configuration reloaded');
   }
