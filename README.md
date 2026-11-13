@@ -1,16 +1,15 @@
 # Local Model Provider
-![VS Code](https://img.shields.io/badge/Visual_Studio_Code-007ACC?style=for-the-badge&logo=visual-studio-code&logoColor=white)
-![Local LLM](https://img.shields.io/badge/Local_LLM-f39c12?style=for-the-badge&logo=amazoneks&logoColor=white)
-![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg?style=for-the-badge)
 
-![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/krevas.local-model-provider?style=flat-square)
-![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/krevas.local-model-provider?style=flat-square)
-![License](https://img.shields.io/github/license/krevas/local-model-provider?style=flat-square)
+[![VS Marketplace](https://vsmarketplacebadges.dev/version-short/krevas.local-model-provider.svg?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=krevas.local-model-provider)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/krevas.local-model-provider.svg?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=krevas.local-model-provider)
+[![Open VSX](https://img.shields.io/open-vsx/v/krevas/local-model-provider?style=flat-square&label=Open%20VSX)](https://open-vsx.org/extension/krevas/local-model-provider)
+[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/krevas/local-model-provider?style=flat-square&label=Open%20VSX%20downloads)](https://open-vsx.org/extension/krevas/local-model-provider)
+[![License](https://img.shields.io/github/license/krevas/local-model-provider?style=flat-square)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/krevas/local-model-provider?style=flat-square)](https://github.com/krevas/local-model-provider/commits/master)
 
 **Connect your local LLMs directly to VS Code for a private and powerful AI coding experience.**
 
 A VS Code extension that connects your editor to self‑hosted or local LLMs via any OpenAI‑compatible server (vLLM, Ollama, TGI, llama.cpp, LocalAI, etc.). Keep source code on your infrastructure while using AI for coding, refactoring, analysis, and more.
-
 
 ## ✨ Highlights
 
@@ -38,12 +37,28 @@ A VS Code extension that connects your editor to self‑hosted or local LLMs via
 
 ## 📥 Installation
 
-1) Install “Local Model Provider” from the VS Code Marketplace.
+1) Install "Local Model Provider" from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=krevas.local-model-provider), or from [Open VSX](https://open-vsx.org/extension/krevas/local-model-provider) if your editor uses the Open VSX registry.
 2) Reload VS Code if prompted.
+
+Requires VS Code 1.100 or later.
 
 ## 🚀 Quick Start
 
 1) Start a server
+- Ollama example
+  ```bash
+  ollama run qwen3:8b
+  ```
+  Then set `local.model.provider.serverUrl` to `http://localhost:11434` (Ollama default port).
+
+- LM Studio example
+  1. Download and install [LM Studio](https://lmstudio.ai/)
+  2. Load a model in the LM Studio UI
+  3. Start the local server (default: `http://localhost:1234`)
+  4. Set `local.model.provider.serverUrl` to `http://localhost:1234`
+  
+  > **Tip:** If tool calling causes errors with your model, disable `local.model.provider.enableToolCalling` in settings.
+
 - vLLM example (gpt-oss-120b)
   ```bash
   vllm serve openai/gpt-oss-120b \
@@ -73,27 +88,16 @@ A VS Code extension that connects your editor to self‑hosted or local LLMs via
   - `--disable-log-requests`: reduce request logging noise
   - `--enable-prefix-caching`: enable prefix/KV cache for repeated prompts
   - `--async-scheduling`: schedule requests asynchronously for better throughput
-  
-- LM Studio example
-  1. Download and install [LM Studio](https://lmstudio.ai/)
-  2. Load a model in the LM Studio UI
-  3. Start the local server (default: `http://localhost:1234`)
-  4. Set `local.model.provider.serverUrl` to `http://localhost:1234`
-  
-  > **Tip:** If tool calling causes errors with your model, disable `local.model.provider.enableToolCalling` in settings.
-
-- Ollama example
-  ```bash
-  ollama run qwen3:8b
-  ```
 
 2) Configure the extension
-- Open VS Code Settings and search for “Local Model Provider”.
-- Required: set `local.model.provider.serverUrl` (e.g. http://localhost:8000)
-- Optional: run “Local Model Provider: Set API Key (Secure)” to store a key in SecretStorage
+- Open VS Code Settings and search for "Local Model Provider".
+- Required: set `local.model.provider.serverUrl` to your server's base URL (default `http://localhost:8000`). A trailing `/v1` is stripped automatically.
+- Optional: run "Local Model Provider: Set API Key (Secure)" to store a key in SecretStorage
 
 3) Use your models
-- Open the model manager and enable models from the “Local Model Provider”.
+- Open the **Language Models** view (Chat model picker → **Manage Models…**).
+- In the **Local Model Provider** group, make sure the models you want are visible (hidden models are dimmed).
+- Select one of them from the Chat model picker.
 
 ## 🖼️ Screenshots
 
@@ -148,10 +152,10 @@ All settings are under the `local.model.provider.*` namespace.
 - `maxRetries` (number): retry attempts (default 3)
 - `retryDelayMs` (number): backoff base delay (default 1000)
 - `modelCacheTtlMs` (number): model list cache TTL (default 300000)
-- `logLevel` ("debug" | "info" | "warn" | "error")
+- `logLevel` ("debug" | "info" | "warn" | "error"): Output channel verbosity (default "info")
 
 API keys are not stored in settings. Use the command palette:
-- “Local Model Provider: Set API Key (Secure)”
+- "Local Model Provider: Set API Key (Secure)"
 
 ## ⌨️ Commands
 
@@ -182,22 +186,22 @@ The status bar displays:
 
 ## 🔧 Troubleshooting
 
-Models don’t appear
+### Models don't appear
 1) `curl http://HOST:PORT/v1/models` and confirm the server responds
 2) Verify `serverUrl` is correct (protocol/port included)
-3) Run “Local Model Provider: Test Server Connection”
+3) Run "Local Model Provider: Refresh Model Cache" and check the error message, or open "Show Output" for details
 
-Empty response
+### Empty response
 1) Ensure the correct tool‑call parser for your model family (e.g. vLLM `--tool-call-parser`)
 2) Disable `enableToolCalling` to test plain chat
 3) Large conversations are truncated automatically; try with fewer messages
 
-Tool call formatting issues
+### Tool call formatting issues
 1) Disable `parallelToolCalling` for unstable models
 2) Set `agentTemperature` to 0.0 for more consistent formatting
 3) For Qwen models that emit raw XML tool calls such as `<tool_call>` or return only reasoning after tools complete, enable `qwenToolLoopCompat`
 
-LM Studio connection errors ("terminated" / "request failed")
+### LM Studio connection errors ("terminated" / "request failed")
 1) Set `serverUrl` to `http://localhost:1234` (LM Studio default port)
 2) Do NOT include `/v1` in the URL — the extension adds it automatically
 3) Disable `parallelToolCalling` — LM Studio may not support this parameter
@@ -205,7 +209,7 @@ LM Studio connection errors ("terminated" / "request failed")
 5) Increase `requestTimeout` if the model takes a long time to load (e.g. 120000)
 6) Check the LM Studio server logs for detailed error messages
 
-Out‑of‑memory (OOM)
+### Out‑of‑memory (OOM)
 - Reduce `--max-model-len`, use a quantized model (AWQ/GPTQ/FP8), or pick a smaller model
 
 ## 🔒 Security & Privacy
@@ -213,6 +217,15 @@ Out‑of‑memory (OOM)
 - Requests are sent only to the server you configure.
 - If authentication is required, API keys are stored securely via VS Code SecretStorage.
 - Sensitive data (like API keys) is never written to logs.
+- With `logLevel` set to "debug", request payloads (truncated to 2,000 characters), which can include prompts and code, are written to the Output channel. Use "info" or higher if that is a concern.
+
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## 🤝 Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📜 License
 
