@@ -17,6 +17,7 @@ export interface ServerPreset {
   name: string;
   url: string;
   apiKey?: string;
+  supportsRunningModels?: boolean;
 }
 
 /**
@@ -62,6 +63,7 @@ export class StatusBarManager implements vscode.Disposable {
   private serverUrl: string = '';
   private lastResponseTime: number = 0;
   private sessionStats: SessionStats | null = null;
+  private readonly runningModelsSupport: Map<string, boolean> = new Map();
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor() {
@@ -95,6 +97,22 @@ export class StatusBarManager implements vscode.Disposable {
     }
 
     this.updateDisplay(options?.errorMessage);
+  }
+
+  /**
+   * Get whether the given server (or current) supports running models. Defaults to true.
+   */
+  public getSupportsRunningModels(url?: string): boolean {
+    const key = url || this.serverUrl;
+    if (!key) return true;
+    return this.runningModelsSupport.get(key) ?? true;
+  }
+
+  /**
+   * Set support flag for a specific server URL (defaults to true if never set).
+   */
+  public setSupportsRunningModels(url: string, supports: boolean): void {
+    this.runningModelsSupport.set(url, supports);
   }
 
   /**
@@ -178,6 +196,17 @@ export class StatusBarManager implements vscode.Disposable {
         label: '$(sync) Refresh Models',
         description: 'Refresh the model list cache',
       },
+    ];
+
+    // Show by default; only hide after a failed check for this server
+    if (this.getSupportsRunningModels()) {
+      items.push({
+        label: '$(play) See Running Models',
+        description: 'Show currently loaded models (Ollama /api/ps)',
+      });
+    }
+
+    items.push(
       { label: '', kind: vscode.QuickPickItemKind.Separator },
       {
         label: '$(gear) Open Settings',
@@ -191,7 +220,7 @@ export class StatusBarManager implements vscode.Disposable {
         label: '$(output) Show Output',
         description: 'View extension logs',
       },
-    ];
+    );
 
     const selected = await vscode.window.showQuickPick(items, {
       placeHolder: `Local Model Provider (${this.getStatusLabel()})`,
@@ -209,6 +238,8 @@ export class StatusBarManager implements vscode.Disposable {
       vscode.commands.executeCommand('local-model-provider.showStats');
     } else if (selected.label.includes('Refresh Models')) {
       vscode.commands.executeCommand('local-model-provider.refreshModels');
+    } else if (selected.label.includes('See Running Models')) {
+      vscode.commands.executeCommand('local-model-provider.showRunningModels');
     } else if (selected.label.includes('Open Settings')) {
       vscode.commands.executeCommand(
         'workbench.action.openSettings',
@@ -243,4 +274,3 @@ export class StatusBarManager implements vscode.Disposable {
     this.disposables.forEach(d => d.dispose());
   }
 }
-

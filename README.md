@@ -24,6 +24,7 @@ A VS Code extension that connects your editor to self‑hosted or local LLMs via
 - Server presets for quick switching between endpoints
 - Usage statistics tracking (requests, tokens, response times)
 - Default model selection for consistent workflow
+- See Running Models command to view currently loaded models (Ollama /api/ps)
 
 ## 🔌 Compatible Inference Servers
 
@@ -123,6 +124,7 @@ All settings are under the `local.model.provider.*` namespace.
 ### Server Configuration
 - `serverUrl` (string): base URL, e.g. `http://localhost:8000`
 - `serverPresets` (array): saved server configurations for quick switching
+  - Each preset can include an optional `supportsRunningModels` (boolean) flag. Defaults to true. Set to false to hide the See Running Models menu item for that server.
 - `defaultModel` (string): default model ID to use (leave empty for auto-select)
 - `requestTimeout` (number, ms): default 60000
 
@@ -159,6 +161,7 @@ API keys are not stored in settings. Use the command palette:
 - "Local Model Provider: Switch Server Preset" — Quick switch between configured server endpoints
 - "Local Model Provider: View Usage Statistics" — Display session statistics (requests, tokens, response times)
 - "Local Model Provider: Refresh Model Cache" — Clear cache and fetch models from server
+- "Local Model Provider: See Running Models" — Show currently loaded models via Ollama `/api/ps`
 
 ## 🏥 Status Bar Health Monitor
 
@@ -167,6 +170,7 @@ See connection status at a glance. Click to open quick actions:
 - Switch server presets
 - View usage statistics
 - Refresh model cache
+- See running models (Ollama `/api/ps`)
 - Set API key
 - Open settings
 - Show logs

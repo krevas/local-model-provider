@@ -2,7 +2,7 @@
   "name": "local-model-provider",
   "displayName": "Local Model Provider",
   "description": "VS Code extension to connect to local LLM inference servers (Ollama, llama.cpp, LocalAI, LM Studio, vLLM) via OpenAI API compatible endpoints.",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "publisher": "krevas",
   "icon": "assets/local-model-provider.png",
   "private": true,
@@ -23,7 +23,8 @@
     "test-qwen": "tsc -p tsconfig.test.json && node out-test/test/qwenXml.test.js",
     "test-compile": "tsc -p ./",
     "deploy": "vsce publish --no-yarn",
-    "package": "vsce package --no-yarn"
+    "package": "vsce package --no-yarn",
+    "lint": "eslint src/"
   },
   "categories": [
     "AI",
@@ -89,6 +90,11 @@
         "command": "local-model-provider.refreshModels",
         "title": "Refresh Model Cache",
         "category": "Local Model Provider"
+      },
+      {
+        "command": "local-model-provider.showRunningModels",
+        "title": "See Running Models",
+        "category": "Local Model Provider"
       }
     ],
     "configuration": {
@@ -113,6 +119,10 @@
               "url": {
                 "type": "string",
                 "description": "Server URL"
+              },
+              "supportsRunningModels": {
+                "type": "boolean",
+                "description": "Whether this server supports /api/ps (running models). Defaults to true."
               }
             },
             "required": ["name", "url"]

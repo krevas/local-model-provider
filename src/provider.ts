@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GatewayClient } from './client';
-import { GatewayConfig, OpenAIChatCompletionRequest } from './types';
+import { GatewayConfig, OpenAIChatCompletionRequest, OllamaPsResponse } from './types';
 import { SecretManager } from './secrets';
 import { StatisticsManager } from './statistics';
 import { parseQwenXmlToolCalls } from './qwenXml';
@@ -1269,8 +1269,30 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
    * Reload configuration and update client
    */
   private reloadConfig(): void {
+    const apiKey = this.config.apiKey;
     this.config = this.loadConfig();
+    this.config.apiKey = apiKey;
     this.client.updateConfig(this.config);
     this.outputChannel.appendLine('Configuration reloaded');
+  }
+
+  /**
+  * Check if the current server supports /api/ps
+  */
+  public async checkPsAvailable(): Promise<boolean> {
+      this.log('debug', `checkPsAvailable for ${this.config.serverUrl}`);
+      const result = await this.client.checkPsAvailable();
+      this.log('debug', `checkPsAvailable result: ${result}`);
+      return result;
+  }
+
+  /**
+  * Fetch currently running models from /api/ps
+  */
+  public async fetchRunningModels(): Promise<OllamaPsResponse> {
+      this.log('debug', `fetchRunningModels for ${this.config.serverUrl}`);
+      const result = await this.client.fetchRunningModels();
+      this.log('debug', `fetchRunningModels result: ${JSON.stringify(result)}`);
+      return result;
   }
 }
