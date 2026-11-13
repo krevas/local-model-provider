@@ -104,7 +104,9 @@ export class StatusBarManager implements vscode.Disposable {
    */
   public getSupportsRunningModels(url?: string): boolean {
     const key = url || this.serverUrl;
-    if (!key) return true;
+    if (!key) {
+      return true;
+    }
     return this.runningModelsSupport.get(key) ?? true;
   }
 

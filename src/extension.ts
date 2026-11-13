@@ -29,7 +29,9 @@ export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.lm.registerLanguageModelChatProvider(
     'local-model-provider',
     provider
-    );
+  );
+
+  context.subscriptions.push(disposable);
 
   // Get server URL for status bar
   const config = vscode.workspace.getConfiguration('local.model.provider');
@@ -39,12 +41,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize per-server running-models support from presets
   const presets = config.get<ServerPreset[]>('serverPresets', []);
   for (const preset of presets) {
-      if (preset.supportsRunningModels === false) {
-          statusBar.setSupportsRunningModels(preset.url, false);
-      }
+    if (preset.supportsRunningModels === false) {
+      statusBar.setSupportsRunningModels(preset.url, false);
+    }
   }
-
-  context.subscriptions.push(disposable);
 
   // Register command to set API key securely
   const setApiKeyCommand = vscode.commands.registerCommand(
@@ -445,62 +445,49 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register command to show running models (checks /api/ps on select and displays results)
   const showRunningModelsCommand = vscode.commands.registerCommand(
-      'local-model-provider.showRunningModels',
-      async () => {
-          const config = vscode.workspace.getConfiguration('local.model.provider');
-          const currentUrl = config.get<string>('serverUrl', 'http://localhost:8000');
-          provider.applyLatestConfiguration();
-          console.log('[Local Model Provider] showRunningModels called for', currentUrl);
-          provider.getOutputChannel().appendLine(`[DEBUG] showRunningModels: server=${currentUrl}`);
+    'local-model-provider.showRunningModels',
+    async () => {
+      const config = vscode.workspace.getConfiguration('local.model.provider');
+      const currentUrl = config.get<string>('serverUrl', 'http://localhost:8000');
+      provider.applyLatestConfiguration();
 
-          const available = await provider.checkPsAvailable();
-          console.log('[Local Model Provider] checkPsAvailable result:', available);
-          provider.getOutputChannel().appendLine(`[DEBUG] checkPsAvailable(${currentUrl}) = ${available}`);
-
-          if (!available) {
-              statusBar.setSupportsRunningModels(currentUrl, false);
-              vscode.window.showWarningMessage(
-                  `Server does not support /api/ps. "See Running Models" will be hidden for ${currentUrl}.`
-              );
-              return;
-          }
-
-          statusBar.setSupportsRunningModels(currentUrl, true);
-
-          try {
-              const running = await provider.fetchRunningModels();
-              console.log('[Local Model Provider] fetchRunningModels result:', JSON.stringify(running, null, 2));
-              provider.getOutputChannel().appendLine(`[DEBUG] fetchRunningModels result: ${JSON.stringify(running)}`);
-
-              const models = running?.models || [];
-              if (models.length === 0) {
-                  vscode.window.showInformationMessage('No models currently running.');
-                  return;
-              }
-
-              const items = models.map((m: any) => ({
-                  label: m.name || m.model || 'unknown',
-                  description: m.size ? `${(m.size / 1e9).toFixed(1)} GB` : '',
-                  detail: m.expires_at ? `Expires: ${m.expires_at}` : undefined,
-              }));
-
-              await vscode.window.showQuickPick(items, {
-                  placeHolder: 'Currently running models',
-                  title: `Running Models (${models.length})`,
-              });
-          } catch (error) {
-              const msg = error instanceof Error ? error.message : String(error);
-              console.error('[Local Model Provider] fetchRunningModels error:', msg);
-              provider.getOutputChannel().appendLine(`[ERROR] fetchRunningModels: ${msg}`);
-
-              // GatewayError already has a clear message
-              if (error instanceof GatewayError) {
-                  vscode.window.showErrorMessage(msg);
-              } else {
-                  vscode.window.showErrorMessage(`Failed to fetch running models: ${msg}`);
-              }
-          }
+      const available = await provider.checkPsAvailable();
+      if (!available) {
+        statusBar.setSupportsRunningModels(currentUrl, false);
+        vscode.window.showWarningMessage(
+          `Server does not support /api/ps. "See Running Models" will be hidden for ${currentUrl}.`
+        );
+        return;
       }
+
+      statusBar.setSupportsRunningModels(currentUrl, true);
+
+      try {
+        const running = await provider.fetchRunningModels();
+        const models = running?.models || [];
+        if (models.length === 0) {
+          vscode.window.showInformationMessage('No models currently running.');
+          return;
+        }
+
+        const items = models.map((m) => ({
+          label: m.name || m.model || 'unknown',
+          description: m.size ? `${(m.size / 1e9).toFixed(1)} GB` : '',
+          detail: m.expires_at ? `Expires: ${m.expires_at}` : undefined,
+        }));
+
+        await vscode.window.showQuickPick(items, {
+          placeHolder: 'Currently running models',
+          title: `Running Models (${models.length})`,
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        // GatewayError messages already describe the failed operation
+        vscode.window.showErrorMessage(
+          error instanceof GatewayError ? msg : `Failed to fetch running models: ${msg}`
+        );
+      }
+    }
   );
 
   // Register command to show output channel

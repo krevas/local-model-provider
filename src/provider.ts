@@ -1277,22 +1277,25 @@ export class GatewayProvider implements vscode.LanguageModelChatProvider {
   }
 
   /**
-  * Check if the current server supports /api/ps
-  */
+   * Check if the current server supports /api/ps
+   */
   public async checkPsAvailable(): Promise<boolean> {
-      this.log('debug', `checkPsAvailable for ${this.config.serverUrl}`);
-      const result = await this.client.checkPsAvailable();
-      this.log('debug', `checkPsAvailable result: ${result}`);
-      return result;
+    const result = await this.client.checkPsAvailable();
+    this.log('debug', `checkPsAvailable(${this.config.serverUrl}) = ${result}`);
+    return result;
   }
 
   /**
-  * Fetch currently running models from /api/ps
-  */
+   * Fetch currently running models from /api/ps
+   */
   public async fetchRunningModels(): Promise<OllamaPsResponse> {
-      this.log('debug', `fetchRunningModels for ${this.config.serverUrl}`);
+    try {
       const result = await this.client.fetchRunningModels();
-      this.log('debug', `fetchRunningModels result: ${JSON.stringify(result)}`);
+      this.log('debug', `fetchRunningModels(${this.config.serverUrl}): ${JSON.stringify(result)}`);
       return result;
+    } catch (error) {
+      this.log('error', `fetchRunningModels(${this.config.serverUrl}) failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 }

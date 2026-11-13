@@ -6,11 +6,12 @@
 - Added **See Running Models** command to the status bar menu that calls the Ollama `/api/ps` endpoint
 - Shows currently loaded models so you can avoid selecting a model that is not loaded and wasting a long timeout on model teardown and rebuild
 - Per-server `supportsRunningModels` flag (defaults to true). A failed `/api/ps` check hides the menu item for that server
-- Debug logging of the check and response in the output channel and console
+- Debug-level logging of the check and response in the output channel (`logLevel: debug`)
 
 ### Bug Fixes
 - Treat only 404/405 responses as "/api/ps not supported" so auth or transient errors do not permanently hide the menu item
-- Treat "fetch failed" as a retryable error so transient network issues get more than one attempt
+- Retry requests that fail with transient connection errors (connection reset, socket closed, connect timeout). Refused connections, DNS and TLS errors still fail fast
+- Fixed the API key being dropped from the HTTP client whenever settings changed or a server preset was switched
 
 ## 1.1.3
 

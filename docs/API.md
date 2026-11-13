@@ -75,7 +75,7 @@ HTTP client for communicating with OpenAI-compatible inference servers.
 The client includes:
 - **Retry Logic**: Exponential backoff with jitter for transient failures
 - **Retryable Status Codes**: 429, 500, 502, 503, 504
-- **Retryable Errors**: also treats "fetch failed" as retryable
+- **Retryable Errors**: `fetch failed` with a transient cause (`ECONNRESET`, `EPIPE`, `ETIMEDOUT`, `UND_ERR_SOCKET`, `UND_ERR_CONNECT_TIMEOUT`)
 - **GatewayError**: Custom error class with status code and retry information
 
 ### SecretManager
@@ -194,13 +194,14 @@ class GatewayError extends Error {
 
 | Scenario | Status Code | Retryable |
 |----------|-------------|-----------|
-| Server unavailable | - | Yes |
+| Request timeout | - | Yes |
 | Rate limited | 429 | Yes |
 | Server error | 500-504 | Yes |
 | Bad request | 400 | No |
 | Unauthorized | 401 | No |
 | Not found | 404 | No |
-| Fetch failed | - | Yes |
+| Connection reset / socket closed | - | Yes |
+| Connection refused / DNS / TLS failure | - | No |
 
 ## Extension Points
 
